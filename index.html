@@ -274,8 +274,21 @@ function migrate(o){
   n.labs=o.labs||{}; n.my=o.my||{}; n.copied=o.copied||{}; n.wgi=Object.assign(f.wgi,o.wgi||{});
   n.calc=o.calc||{}; n.ok=o.ok||{}; n.tries=o.tries||{}; n.shown=o.shown||{};
   ['B17','B18','B19','B20','B21'].forEach(k=>{ if(!isFinite(n.my[k])&&isFinite(n.calc[k])) n.my[k]=n.calc[k]; });
+  recheckCalc(n);
   n.v=2; n.step=(n.co&&n.co.host&&n.co.home)?'menu':'company';
   return n;
+}
+/* Re-check the Excel cells on every load: never trust ticks stored by an older version. */
+function recheckCalc(n){
+  const c=n.calc||{};
+  if(INPUTS.some(r=>!isFinite(c[r[0]]))){ RESULTS.forEach(r=>{ if(n.ok[r[0]]!==undefined) n.ok[r[0]]=false; }); return; }
+  const atomNums=c.B17===4.1&&c.B18===2.8&&c.B19===13.75&&c.B20===2.5&&!(n.co&&n.co.host==='BRA'&&n.co.home==='ITA');
+  const e=expect(c);
+  RESULTS.forEach(r=>{ const k=r[0];
+    if(!isFinite(c[k])){ delete n.ok[k]; delete n.ok['_'+k]; delete n.shown[k]; return; }
+    const res=atomNums?{ok:false,msg:'These are ATOM\'s template numbers. Use your own countries.'}:checkCell(k,c,e);
+    n.ok[k]=res.ok; n.ok['_'+k]=res.msg||'';
+    if(!res.ok){ delete n.shown[k]; n.tries[k]=Math.max(n.tries[k]||0,1); } });
 }
 function loadObj(o){ S=migrate(o); persist(); render(); window.scrollTo(0,0); }
 function isAtom(){ const co=S.co||{}; return !!S.demo || (/^\s*atom\s*$/i.test(co.name||'') && co.host==='BRA' && co.home==='ITA'); }
