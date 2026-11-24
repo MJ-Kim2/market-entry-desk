@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/35336126/README.md)
 # Market Entry Desk v2 · MG2644 coursework toolkit
 
 One web page with four tools. Each tool is linked to a section of the coursework, and an essay map ticks off each part as students finish it. The game rounds have been removed.
@@ -23,7 +22,7 @@ Upload this `index.html` to your `market-entry-desk` GitHub repository, replacin
 
 - **Heat map grouping:** Political = voice & accountability, political stability, government effectiveness. Legal = regulatory quality, rule of law, control of corruption.
 - **Colours:** one colour scale, darker = weaker score = more risk, in bands of 20. Colour-blind safe and prints in grey.
-- **Culture:** not in the heat map. The page tells students to use a cultural source (Hofstede/The Culture Factor, GLOBE).
+- **Culture:** not in the heat map. The page links students to The Culture Factor's country comparison tool (Hofstede) and mentions GLOBE.
 - **The heat map figure** is labelled "Figure made by the author with the MG2644 module tool", and the page says it is extra to the two required Excel figures.
 - **ATOM** appears only through the lecturer link at the bottom of the welcome page.
 
@@ -46,6 +45,15 @@ Upload this `index.html` to your `market-entry-desk` GitHub repository, replacin
 - **Egypt, 6 Mar 2024:** 30.85 → about 50 pounds per US dollar (CNBC).
 - **Argentina 2023 inflation of 211%** (Lab 1 preset): 211.4% for the year to December 2023 (INDEC, reported by Reuters, 11 January 2024).
 
+## Fixes in v2.2 (24 November 2026, second check)
+
+- **Decimal commas:** "3,4" or "33450,12" (common on European and Latin American laptops) was read as 34 or 3345012, and could even give false green ticks. The tool now reads a decimal comma correctly, and still reads thousands commas ("631,354").
+- **"Show the answer":** a revealed answer stayed ticked after the student changed a yellow cell, so old numbers went into the tables. It is now re-checked every time.
+- **Rounded answers:** answers filled in by the tool (and the ATOM demo) show 1.3 or 631354, not 1.2999999999999998.
+- **ATOM demo:** comes with the Excel checker already ticked, so Tables 1 and 2 show straight away for a live demo.
+- **Checklist download** before setting up a company now goes to the set-up page (it used to say "Home: undefined").
+- **Typed governance scores** must be from 0 to 100; anything else shows a message.
+
 ## Fixes in v2.1 (24 November 2026)
 
 - **Saved work with empty cells:** after a reload or a Week 8 save file, empty Excel cells showed the word "null", counted as 0, and could give false ticks and wrong numbers in the checklist. Empty cells now stay empty.
@@ -56,6 +64,7 @@ Upload this `index.html` to your `market-entry-desk` GitHub repository, replacin
 - **Heat map:** the range-bar year updates when the year changes; the Play button no longer gets stuck on "Playing…"; changing host or home here now shows a warning (it changes the whole toolkit, and the currency name and Excel numbers stay the old ones); the PNG keeps the * for typed scores; the look-up link goes to the WGI data page.
 - **Citations:** heat-map facts and figure notes now cite "World Bank (2026b)", matching the reference list.
 - **Text:** removed "company card" (from the old game); the Week 8 game rule now says "If you played the Week 8 game…".
+- **Culture:** the heat map page now links to The Culture Factor's country comparison tool (https://www.theculturefactor.com/country-comparison-tool) for a cultural dimension.
 - **Phones:** the Excel checker and essay tables no longer run wider than the screen.
 
 ## Tested
@@ -64,3 +73,5 @@ Upload this `index.html` to your `market-entry-desk` GitHub repository, replacin
 - Real Week 8 save files (own company, ATOM, own company with ATOM's numbers) and a save code, made with the Week 8 version from the repository history.
 - Reload with a half-finished Excel checker; deflation; a negative policy rate; a host currency that gets stronger; a home currency much weaker than the host; a missing-data country (French Polynesia); all downloads.
 - Animations respect "reduce motion" settings.
+- Second check (v2.2): typing variants (decimal commas, % signs, currency symbols, minus signs), "Show the answer" then changing inputs, save file and save code round trips with accented and Chinese names, broken save files, the Start again button, odd characters in names (no code runs), keyboard use of the heat map, dragging in Lab 4, double clicks and leaving a page mid-animation.
+- Tested in Chrome only (the same engine as Edge). Safari and Firefox were not available to test; the code uses only features they support.
