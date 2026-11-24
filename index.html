@@ -143,6 +143,8 @@ input[type=range]{width:100%;accent-color:#13657a}
 textarea{font:inherit;font-size:1rem;padding:9px 11px;border:2px solid var(--line);border-radius:9px;width:100%}
 .frame .fact{background:#fafbfd;border-left:4px solid var(--accent);padding:8px 12px;margin:8px 0;font-size:.98rem}
 .banner{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 14px;margin:10px 0}
+main{overflow-wrap:break-word}
+@media (max-width:700px){ #app td[id^="m"]{min-width:0 !important} #app input.num{max-width:120px} #app table td{padding:6px 4px} }
 @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 </style>
 </head>
@@ -164,6 +166,8 @@ const KEY = 'med_save_v1';
 const app = document.getElementById('app');
 
 /* ---------- helpers ---------- */
+/* Real numbers only: null (an empty cell in an old save) must not count as 0. */
+function isNum(v){ return typeof v==='number' && Number.isFinite(v); }
 function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function num(v){
   if(v===null||v===undefined) return NaN;
@@ -172,7 +176,7 @@ function num(v){
   if(t==='') return NaN;
   return Number(t);
 }
-function f(n,d){ if(d===undefined) d=1; if(!isFinite(n)) return '—'; const s=Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d}); return (n<0?'−':'')+s; }
+function f(n,d){ if(d===undefined) d=1; if(!isNum(n)) return '—'; const s=Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d}); return (n<0?'−':'')+s; }
 function fs(n,d){ return (n>0?'+':'')+f(n,d); }
 function money(n){ return f(n,0); }
 function today(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -185,7 +189,7 @@ function T(str){
    .replace(/\{hostCur\}/g,esc(co.hostCur||'host currency')).replace(/\{homeCur\}/g,esc(co.homeCur||'home currency'));
 }
 function more(p){ // literal rule from Seminar 3: host per 1 home
-  const co=S.co; if(!isFinite(p)) return '—';
+  const co=S.co; if(!isNum(p)) return '—';
   if(Math.abs(p)<0.05) return 'no change in '+esc(co.hostCur)+' per 1 '+esc(co.homeCur);
   return 'about '+f(Math.abs(p))+'% '+(p>0?'more':'fewer')+' '+esc(co.hostCur)+' for 1 '+esc(co.homeCur)+(p>0?' ('+esc(co.hostCur)+' weaker)':' ('+esc(co.hostCur)+' stronger)');
 }
@@ -199,7 +203,7 @@ const WGI=[
  {k:'RL',name:'Rule of law',plain:'Contracts, courts, property rights, police',dim:'Legal'},
  {k:'CC',name:'Control of corruption',plain:'Public power not used for private gain',dim:'Legal'}
 ];
-function wgiLink(k,iso3){ return 'https://data.worldbank.org/indicator/GOV_WGI_'+k+'_SC?locations='+ciso2(iso3); }
+function wgiLink(k,iso3){ return 'https://www.worldbank.org/en/publication/worldwide-governance-indicators/interactive-data-access'; }
 const ATOM={ co:{name:'ATOM',product:'one cutting machine',home:'ITA',host:'BRA',homeCur:'EUR',hostCur:'reais'},
   calc:{B15:100000,B16:6.3135392325966295,B17:4.1,B18:2.8,B19:13.75,B20:2.5,B21:33.34643846792626} };
 const BRIEF={
@@ -234,7 +238,7 @@ const RESULTS=[
 function expect(c){ return {B23:c.B17-c.B18,B24:c.B19-c.B20,B25:c.B19-c.B17,B26:c.B20-c.B18,B28:c.B15*c.B16,
   B29:c.B15*c.B16*(1+(c.B17-c.B18)/100),B30:c.B15*c.B16*(1+(c.B19-c.B20)/100),B31:c.B15*c.B16*(1+c.B21/100)}; }
 function checkCell(k,c,e){
-  const v=c[k]; if(!isFinite(v)) return {ok:false,msg:'Empty. Type the number from your Excel cell.'};
+  const v=c[k]; if(!isNum(v)) return {ok:false,msg:'Empty. Type the number from your Excel cell.'};
   if(['B23','B24','B25','B26'].includes(k)){
     if(Math.abs(v-e[k])<=0.06) return {ok:true};
     let msg='Not right yet.';
@@ -246,7 +250,7 @@ function checkCell(k,c,e){
     if(c.B16>0 && Math.abs(v-c.B15/c.B16)<=Math.max(1,0.01*c.B15/c.B16)) return {ok:false,msg:'You divided. B28 multiplies: =B15*B16.'};
     return {ok:false,msg:'Not right yet.'};
   }
-  const base=(isFinite(c.B28)&&c.B28>0)?c.B28:e.B28;
+  const base=(isNum(c.B28)&&c.B28>0)?c.B28:e.B28;
   const pct=(v/base-1)*100;
   const want={B29:e.B23,B30:e.B24,B31:c.B21}[k];
   const tol=Math.max(0.06,100/base);
@@ -273,7 +277,7 @@ function migrate(o){
   n.heat=Object.assign(f.heat,o.heat||{}); n.heat.frames=Object.assign({pol:{},leg:{}},(o.heat&&o.heat.frames)||{});
   n.labs=o.labs||{}; n.my=o.my||{}; n.copied=o.copied||{}; n.wgi=Object.assign(f.wgi,o.wgi||{});
   n.calc=o.calc||{}; n.ok=o.ok||{}; n.tries=o.tries||{}; n.shown=o.shown||{};
-  ['B17','B18','B19','B20','B21'].forEach(k=>{ if(!isFinite(n.my[k])&&isFinite(n.calc[k])) n.my[k]=n.calc[k]; });
+  ['B17','B18','B19','B20','B21'].forEach(k=>{ if(!isNum(n.my[k])&&isNum(n.calc[k])) n.my[k]=n.calc[k]; });
   recheckCalc(n);
   n.v=2; n.step=(n.co&&n.co.host&&n.co.home)?'menu':'company';
   return n;
@@ -281,11 +285,11 @@ function migrate(o){
 /* Re-check the Excel cells on every load: never trust ticks stored by an older version. */
 function recheckCalc(n){
   const c=n.calc||{};
-  if(INPUTS.some(r=>!isFinite(c[r[0]]))){ RESULTS.forEach(r=>{ if(n.ok[r[0]]!==undefined) n.ok[r[0]]=false; }); return; }
+  if(INPUTS.some(r=>!isNum(c[r[0]]))){ RESULTS.forEach(r=>{ if(n.ok[r[0]]!==undefined) n.ok[r[0]]=false; }); return; }
   const atomNums=c.B17===4.1&&c.B18===2.8&&c.B19===13.75&&c.B20===2.5&&!(n.co&&n.co.host==='BRA'&&n.co.home==='ITA');
   const e=expect(c);
   RESULTS.forEach(r=>{ const k=r[0];
-    if(!isFinite(c[k])){ delete n.ok[k]; delete n.ok['_'+k]; delete n.shown[k]; return; }
+    if(!isNum(c[k])){ delete n.ok[k]; delete n.ok['_'+k]; delete n.shown[k]; return; }
     const res=atomNums?{ok:false,msg:'These are ATOM\'s template numbers. Use your own countries.'}:checkCell(k,c,e);
     n.ok[k]=res.ok; n.ok['_'+k]=res.msg||'';
     if(!res.ok){ delete n.shown[k]; n.tries[k]=Math.max(n.tries[k]||0,1); } });
@@ -301,18 +305,18 @@ function hasAny(iso3,k){ const c=WGIALL[iso3]; return !!(c&&c[k]); }
 function latestYear(iso3){ let m=null; WGI.forEach(x=>{ const d=wd(iso3,x.k); if(d&&(m===null||d.yr>m)) m=d.yr; }); return m||2025; }
 function heatYear(){ if(!S.heat.year) S.heat.year=latestYear(S.co.host); return S.heat.year; }
 function hv(k,y,side){ const iso=side==='home'?S.co.home:S.co.host; const d=wdy(iso,k,y); if(d) return d;
-  if(!hasAny(iso,k) && y===latestYear(iso)){ const t=num(S.wgi[side==='home'?'home':'host'][k]); if(isFinite(t)) return {v:t,lb:null,ub:null,yr:y,typed:true}; }
+  if(!hasAny(iso,k) && y===latestYear(iso)){ const t=num(S.wgi[side==='home'?'home':'host'][k]); if(isNum(t)) return {v:t,lb:null,ub:null,yr:y,typed:true}; }
   return null; }
 function gapRealY(k,y){ const h=hv(k,y,'host'), o=hv(k,y,'home');
   if(!h||!o||h.lb==null||o.lb==null) return null; if(h.ub<o.lb) return 'lower'; if(h.lb>o.ub) return 'higher'; return 'unclear'; }
 function weakestY(dim,y){ let best=null; WGI.filter(w=>w.dim===dim).forEach(w=>{ const d=hv(w.k,y,'host'); if(d&&(best===null||d.v<best.v)) best={k:w.k,v:d.v,name:w.name}; }); return best; }
 const SHADES=['#a63603','#e6550d','#fd8d3c','#fdbe85','#feedde'];
-function shade(v){ if(!isFinite(v)) return '#eef1f6'; const i=Math.min(4,Math.max(0,Math.floor(v/20))); return SHADES[i]; }
-function shadeText(v){ return isFinite(v)&&v<40?'#ffffff':'#1f2a37'; }
+function shade(v){ if(!isNum(v)) return '#eef1f6'; const i=Math.min(4,Math.max(0,Math.floor(v/20))); return SHADES[i]; }
+function shadeText(v){ return isNum(v)&&v<40?'#ffffff':'#1f2a37'; }
 
 /* ---------- animation ---------- */
 let ANIM=0, TIMERS=[];
-function stopAll(){ ANIM++; TIMERS.forEach(t=>clearInterval(t)); TIMERS=[]; }
+function stopAll(){ ANIM++; TIMERS.forEach(t=>clearInterval(t)); TIMERS=[]; const pb=document.getElementById('bPlayY'); if(pb) pb.textContent='▶ Play 2017 → 2025'; }
 function tween(dur,fn,done){ const tok=ANIM; if(RM){ fn(1); if(done) done(); return; }
   const t0=performance.now(); function step(t){ if(tok!==ANIM) return; const p=Math.min(1,(t-t0)/dur); const e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; fn(e); if(p<1) requestAnimationFrame(step); else if(done) done(); }
   requestAnimationFrame(step); }
@@ -353,7 +357,7 @@ function buildChecklist(){
   L.push('MG2644 COURSEWORK CHECKLIST (Market Entry Desk)'); L.push('Company: '+(co.name||'')+' | Home: '+cname(co.home)+' | Host: '+cname(co.host)+' | Saved: '+new Date().toLocaleString('en-GB')); L.push('');
   emapSecs().forEach(s=>{ L.push(s.sec.toUpperCase()); s.items.forEach(it=>L.push((it[1]?'[x] ':'[ ] ')+it[0])); L.push(''); });
   L.push('YOUR NUMBERS');
-  const g=(k)=>isFinite(c[k])?c[k]:my[k];
+  const g=(k)=>isNum(c[k])?c[k]:my[k];
   L.push('Inflation forecasts: host '+f(g('B17'))+'%, home '+f(g('B18'))+'%  ->  PPP (B23): '+fs(g('B17')-g('B18'),2)+'%');
   L.push('Policy rates: host '+f(g('B19'),2)+'%, home '+f(g('B20'),2)+'%  ->  IFE (B24): '+fs(g('B19')-g('B20'),2)+'%');
   L.push('Real interest rate (Fisher): host '+f(g('B19')-g('B17'),2)+'%, home '+f(g('B20')-g('B18'),2)+'%');
@@ -459,9 +463,9 @@ function fileBase(){ return 'MED_'+((S.co&&S.co.name)||'work').replace(/[^A-Za-z
 const LABFOR={B23:['lab1','PPP'],B24:['lab2','IFE'],B25:['lab3','Fisher'],B26:['lab3','Fisher']};
 function vCalc(){
   if(!setupDone()) return go('company');
-  const c=S.calc; ['B17','B18','B19','B20','B21'].forEach(k=>{ if(!isFinite(c[k])&&isFinite(S.my[k])) c[k]=S.my[k]; });
+  const c=S.calc; ['B17','B18','B19','B20','B21'].forEach(k=>{ if(!isNum(c[k])&&isNum(S.my[k])) c[k]=S.my[k]; });
   const row=(k,label,help,cls)=>`<tr><td><span class="cell ${cls}">${k}</span></td><td><label for="i${k}">${T(label)}</label>${help?'<div class="small">'+T(help)+'</div>':''}${LABFOR[k]?` <button type="button" class="quiet" style="padding:2px 8px;font-size:.78rem" data-lab="${LABFOR[k][0]}">What does this mean? (${LABFOR[k][1]})</button>`:''}</td>
-    <td class="r"><input class="num" type="text" inputmode="decimal" id="i${k}" value="${isFinite(c[k])?c[k]:''}"></td><td id="m${k}" style="min-width:170px"></td></tr>`;
+    <td class="r"><input class="num" type="text" inputmode="decimal" id="i${k}" value="${isNum(c[k])?c[k]:''}"></td><td id="m${k}" style="min-width:170px"></td></tr>`;
   app.innerHTML=`
   <h1>Excel checker</h1>
   <p>Open your <b>Seminar 3 Excel file</b>. Finish rows 15–31 in Excel first, then copy each number here. The tool works out every green cell from your own yellow cells and checks it.</p>
@@ -478,11 +482,11 @@ function vCalc(){
   app.querySelectorAll('[data-lab]').forEach(b=>b.onclick=()=>{ readCalc(); go(b.dataset.lab); });
   if(Object.keys(S.ok).length) paintChecks();
 }
-function readCalc(){ INPUTS.concat(RESULTS).forEach(r=>{ const e=$('i'+r[0]); if(e) S.calc[r[0]]=num(e.value); }); ['B17','B18','B19','B20','B21'].forEach(k=>{ if(isFinite(S.calc[k])) S.my[k]=S.calc[k]; }); persist(); }
+function readCalc(){ INPUTS.concat(RESULTS).forEach(r=>{ const e=$('i'+r[0]); if(e) S.calc[r[0]]=num(e.value); }); ['B17','B18','B19','B20','B21'].forEach(k=>{ if(isNum(S.calc[k])) S.my[k]=S.calc[k]; }); persist(); }
 function allOk(){ return RESULTS.every(r=>S.ok[r[0]]); }
 function doCheck(){
   readCalc(); const c=S.calc; const msg=$('calcMsg');
-  const missing=INPUTS.filter(r=>!isFinite(c[r[0]]));
+  const missing=INPUTS.filter(r=>!isNum(c[r[0]]));
   if(missing.length){ msg.innerHTML='<span class="bad">Fill the yellow cells first: '+missing.map(r=>r[0]).join(', ')+'.</span>'; return; }
   if(!(c.B15>0)||!(c.B16>0)){ msg.innerHTML='<span class="bad">B15 and B16 must be bigger than 0.</span>'; return; }
   if(c.B17===4.1&&c.B18===2.8&&c.B19===13.75&&c.B20===2.5&&!(S.co.host==='BRA'&&S.co.home==='ITA')){
@@ -503,7 +507,7 @@ function paintChecks(){
       if((S.tries[k]||0)>=2) h+=' <button class="quiet" data-show="'+k+'" type="button">Show the answer</button>';
       m.innerHTML=h; } });
   app.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const k=b.dataset.show; let val=e[k];
-    if(['B29','B30','B31'].includes(k)){ const base=(isFinite(c.B28)&&c.B28>0&&S.ok.B28)?c.B28:e.B28; val=base*(1+({B29:e.B23,B30:e.B24,B31:c.B21}[k])/100); }
+    if(['B29','B30','B31'].includes(k)){ const base=(isNum(c.B28)&&c.B28>0&&S.ok.B28)?c.B28:e.B28; val=base*(1+({B29:e.B23,B30:e.B24,B31:c.B21}[k])/100); }
     S.calc[k]=val; S.shown[k]=true; S.ok[k]=true; persist(); vCalc(); renderSide();
     $('calcMsg').innerHTML='<span class="small">Answer shown for '+k+'. Now fix that cell in your Excel file too.</span>'; });
 }
@@ -513,11 +517,11 @@ const NS='http://www.w3.org/2000/svg';
 function stepper(l){ const st=S.labs[l]||{}; const n=[['watched','1 Watch'],['played','2 Play'],['mine','3 My numbers'],['done','4 Quick check']];
   return '<div class="stepper" id="stp">'+n.map(x=>`<span class="${st[x[0]]?'on':''}">${st[x[0]]?'✓ ':''}${x[1]}</span>`).join('')+'<span>5 Essay</span></div>'; }
 function markLab(l,key){ S.labs[l]=S.labs[l]||{}; if(S.labs[l][key]) return; S.labs[l][key]=true; persist(); const sp=$('stp'); if(sp) sp.outerHTML=stepper(l); renderSide(); }
-function myVal(k){ return isFinite(S.my[k])?S.my[k]:(isFinite(S.calc[k])?S.calc[k]:''); }
+function myVal(k){ return isNum(S.my[k])?S.my[k]:(isNum(S.calc[k])?S.calc[k]:''); }
 function myInputs(fields){ return '<div class="ctrl">'+fields.map(fl=>`<div class="field"><label for="m${fl[0]}"><span class="cell yellow">${fl[0]}</span> ${T(fl[1])}</label><input class="num" type="text" inputmode="decimal" id="m${fl[0]}" value="${esc(myVal(fl[0]))}"></div>`).join('')+'</div>'; }
-function readMy(fields,msgId){ const out={}; let bad=[]; fields.forEach(fl=>{ const v=num($('m'+fl[0]).value); if(!isFinite(v)) bad.push(fl[0]); else out[fl[0]]=v; });
+function readMy(fields,msgId){ const out={}; let bad=[]; fields.forEach(fl=>{ const v=num($('m'+fl[0]).value); if(!isNum(v)) bad.push(fl[0]); else out[fl[0]]=v; });
   if(bad.length){ $(msgId).innerHTML='<span class="bad">Type a number in '+bad.join(', ')+' (numbers only, no % sign).</span>'; return null; }
-  Object.assign(S.my,out); Object.keys(out).forEach(k=>{ if(!isFinite(S.calc[k])) S.calc[k]=out[k]; }); persist(); return out; }
+  Object.assign(S.my,out); Object.keys(out).forEach(k=>{ if(!isNum(S.calc[k])) S.calc[k]=out[k]; }); persist(); return out; }
 function quickCheck(l,q,opts,correct,why){
   const st=S.labs[l]||{}; const ans=st.ans;
   return `<div class="card" id="qc"><h3>4 · Quick check</h3><p><b>${q}</b></p>${opts.map((o,i)=>`<button type="button" class="qopt ${ans!=null?(i===correct?'right':(i===ans?'wrong':'')):''}" data-q="${i}">${String.fromCharCode(65+i)}. ${o}</button>`).join('')}
@@ -530,6 +534,7 @@ function labNav(n){ const nx=n<4?['lab'+(n+1),'Next: Lab '+(n+1)+' →']:['calc'
   return `<div class="btns"><button class="quiet" type="button" id="bAll">← All labs</button><button type="button" id="bNx">${nx[1]}</button></div>`; }
 function wireNav(n){ $('bAll').onclick=()=>go('labs'); $('bNx').onclick=()=>go(n<4?'lab'+(n+1):'calc'); }
 function el(tag,attrs,parent,text){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(text!=null) e.textContent=text; if(parent) parent.appendChild(e); return e; }
+function fit(t,maxW,base){ if(!t) return; t.setAttribute('font-size',base); try{ let z=base; while(z>8 && t.getComputedTextLength()>maxW){ z-=1; t.setAttribute('font-size',z); } }catch(e){} }
 function sliderVal(id){ return parseFloat($(id).value); }
 function setSlider(id,v){ const s=$(id); if(v>parseFloat(s.max)) s.max=String(Math.ceil(v)); if(v<parseFloat(s.min)) s.min=String(Math.floor(v)); s.value=String(v); const o=$('o'+id.slice(1)); if(o) o.textContent=f(v,2).replace(/\.?0+$/,''); }
 function wireSlider(id,cb){ const s=$(id); s.oninput=()=>{ const o=$('o'+id.slice(1)); if(o) o.textContent=f(parseFloat(s.value),2).replace(/\.?0+$/,''); cb(); }; }
@@ -574,20 +579,22 @@ function vLab1(){
     el('text',{x:80,y:241,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'#0b2545',id:id+'T'},g,'');
   }
   basket(20,'Home','h'); basket(460,'Host','f');
-  el('circle',{cx:600,cy:31,r:20,fill:'#f2a541',stroke:'#8a5a00','stroke-width':2,id:'coin'},sv);
-  el('text',{x:600,y:36,'text-anchor':'middle','font-size':11,'font-weight':800,fill:'#0b2545',id:'coinT'},sv,'1 host');
+  el('circle',{cx:448,cy:62,r:20,fill:'#f2a541',stroke:'#8a5a00','stroke-width':2,id:'coin'},sv);
+  el('text',{x:448,y:66,'text-anchor':'middle','font-size':11,'font-weight':800,fill:'#0b2545',id:'coinT'},sv,'1 host');
   el('path',{d:'M225 200 A95 95 0 0 1 415 200',fill:'none',stroke:'#d9dee8','stroke-width':16},sv);
-  el('path',{d:'M225 200 A95 95 0 0 1 320 105',fill:'none',stroke:'#e2f4e8','stroke-width':16},sv);
-  el('text',{x:222,y:226,'text-anchor':'middle','font-size':12,fill:'#5b6478'},sv,'no change');
+  el('path',{d:'M225 200 A95 95 0 0 1 257.7 128.3',fill:'none',stroke:'#e2f4e8','stroke-width':16},sv);
+  el('line',{x1:267.5,y1:139.6,x2:247.8,y2:117,stroke:'#5b6478','stroke-width':2},sv);
+  el('text',{x:244,y:110,'text-anchor':'end','font-size':12,fill:'#5b6478'},sv,'no change');
+  el('text',{x:222,y:226,'text-anchor':'middle','font-size':12,fill:'#5b6478'},sv,'host stronger');
   el('text',{x:418,y:226,'text-anchor':'middle','font-size':12,fill:'#5b6478'},sv,'host much weaker');
   el('text',{x:320,y:82,'text-anchor':'middle','font-size':14,'font-weight':700,fill:'#5b6478'},sv,'Exchange rate');
   const ng=el('g',{id:'needle'},sv); el('line',{x1:320,y1:200,x2:320,y2:118,stroke:'#b42318','stroke-width':5,'stroke-linecap':'round'},ng); el('circle',{cx:320,cy:200,r:9,fill:'#0b2545'},sv);
   el('text',{x:320,y:252,'text-anchor':'middle','font-size':17,'font-weight':800,fill:'#0b2545',id:'rate'},sv,'');
   el('text',{x:320,y:274,'text-anchor':'middle','font-size':12,fill:'#5b6478',id:'rateL'},sv,'');
-  const ang=p=>-82+164*Math.max(-0.08,Math.min(p,1.5))/1.5;
-  function draw(hp,op,rp,cr){ $('hT').textContent=money(hp)+(mode.sym?' '+mode.ol:''); $('fT').textContent=money(op)+(mode.sym?' '+mode.hl:'');
-    $('needle').setAttribute('transform',`rotate(${ang(rp/mode.base-1)} 320 200)`); $('rate').textContent='1 '+mode.ol+' = '+rateTxt(rp)+' '+mode.hl; $('coin').setAttribute('r',cr); }
-  function reset(){ stopAll(); $('hL').textContent='Home'+(mode.sym?' ('+mode.ol+')':''); $('fL').textContent='Host'+(mode.sym?' ('+mode.hl+')':''); $('coinT').textContent='1 '+(mode.sym?mode.hl.slice(0,6):'host');
+  const ang=p=>-82+164*(Math.max(-0.5,Math.min(p,1.5))+0.5)/2;
+  function draw(hp,op,rp,cr){ $('hT').textContent=money(hp)+(mode.sym?' '+mode.ol:''); $('fT').textContent=money(op)+(mode.sym?' '+mode.hl:''); fit($('hT'),112,20); fit($('fT'),112,20);
+    $('needle').setAttribute('transform',`rotate(${ang(rp/mode.base-1)} 320 200)`); $('rate').textContent='1 '+mode.ol+' = '+rateTxt(rp)+' '+mode.hl; fit($('rate'),290,17); $('coin').setAttribute('r',cr); }
+  function reset(){ stopAll(); $('hL').textContent='Home'+(mode.sym?' ('+mode.ol+')':''); $('fL').textContent='Host'+(mode.sym?' ('+mode.hl+')':''); fit($('hL'),150,18); fit($('fL'),150,18); $('coinT').textContent='1 '+(mode.sym?mode.hl.slice(0,6):'host'); fit($('coinT'),34,11);
     draw(100,100*mode.base,mode.base,20); $('rateL').textContent='host currency per 1 home currency'; }
   function play(h,o,after){ reset(); const hp1=100*(1+o/100), fp1=100*mode.base*(1+h/100), r1=mode.base*(1+h/100)/(1+o/100), ratio=r1/mode.base;
     seq([n=>tween(900,t=>draw(lerp(100,hp1,t),lerp(100*mode.base,fp1,t),mode.base,20),n),
@@ -601,7 +608,7 @@ function vLab1(){
   $('bMine').onclick=()=>{ const v=readMy([['B17'],['B18']],'mineOut'); if(!v) return; const d=v.B17-v.B18;
     mode={base:(S.calc.B16>0?S.calc.B16:5),hl:co.hostCur,ol:co.homeCur,sym:true}; setSlider('sH',v.B17); setSlider('sO',v.B18);
     play(v.B17,v.B18,()=>{ $('sv').scrollIntoView({behavior:RM?'auto':'smooth',block:'center'}); });
-    $('mineOut').innerHTML=`<div class="note">Your PPP number (cell <b>B23</b>) = ${f(v.B17,2)} − ${f(v.B18,2)} = <b>${fs(d,2)}%</b>. Next year, 1 ${esc(co.homeCur)} is expected to buy about ${f(Math.abs(d),1)}% ${d>=0?'more':'less'} ${esc(co.hostCur)}. So the price of ${esc(co.product)} in ${esc(co.hostCur)} must ${d>=0?'rise':'change'} by about ${f(Math.abs(d),1)}% just to bring home the same money.</div>`;
+    $('mineOut').innerHTML=`<div class="note">Your PPP number (cell <b>B23</b>) = ${f(v.B17,2)} − ${f(v.B18,2)} = <b>${fs(d,2)}%</b>. Next year, 1 ${esc(co.homeCur)} is expected to buy about ${f(Math.abs(d),1)}% ${d>=0?'more':'less'} ${esc(co.hostCur)}. So the price of ${esc(co.product)} in ${esc(co.hostCur)} ${d>=0?'must rise by about '+f(Math.abs(d),1)+'% just to bring home the same money':'could fall by about '+f(Math.abs(d),1)+'% and still bring home the same money'}.</div>`;
     markLab('l1','mine'); renderSide(); };
   wireQuick('l1',0,'Prices rise faster in the host country, so the host currency gets weaker: 1 home currency buys about 6% more host currency (8 − 2 = 6).'); wireNav(1);
 }
@@ -616,7 +623,7 @@ function vLab2(){
    <div class="caption" id="cap">You have 1,000 in home currency. Keep it at home, or swap it into host currency at 5 to 1 and save it there. Press <b>Play the year</b>.</div>
    <div class="ctrl"><div><label for="sF">Host interest rate: <output id="oF">12</output>%</label><input type="range" id="sF" min="0" max="40" step="0.25" value="12"></div>
    <div><label for="sR">Home interest rate: <output id="oR">2</output>%</label><input type="range" id="sR" min="0" max="10" step="0.25" value="2"></div></div>
-   <p><label style="font-weight:600"><input type="checkbox" id="nf"> What if the host currency did <b>not</b> fall?</label></p>
+   <p><label style="font-weight:600"><input type="checkbox" id="nf"> What if the exchange rate did <b>not</b> move?</label></p>
    <div class="btns"><button id="bPlay" type="button">▶ Play the year</button></div>
   </div>
   <div class="card"><h3>3 · Now use your numbers</h3><p>From your Excel file: today's policy interest rates (central banks).</p>
@@ -641,23 +648,26 @@ function vLab2(){
   const defs=el('defs',{},sv); const m=el('marker',{id:'ar',markerWidth:10,markerHeight:10,refX:8,refY:5,orient:'auto'},defs); el('path',{d:'M0 0 L10 5 L0 10 z',fill:'#13657a'},m);
   const dots=el('g',{id:'dots',opacity:0},sv); for(let i=0;i<18;i++) el('circle',{cx:140,cy:90+(i%6)*24,r:7,fill:'#13657a'},dots);
   const H=v=>Math.min(180,v/1000*100);
-  function setJar(id,amt,homeEq,lab,sub){ const h=H(homeEq); $(id+'F').setAttribute('y',240-h); $(id+'F').setAttribute('height',h); $(id+'A').textContent=lab; $(id+'S').textContent=sub||''; }
+  function setJar(id,amt,homeEq,lab,sub){ const h=H(homeEq); $(id+'F').setAttribute('y',240-h); $(id+'F').setAttribute('height',h); $(id+'A').textContent=lab; $(id+'S').textContent=sub||''; fit($(id+'A'),200,18); fit($(id+'S'),210,12); }
+  function setXr(r){ $('xr').textContent='1 '+mode.ol+' = '+rateTxt(r)+' '+mode.hl; fit($('xr'),190,18); }
   function reset(rf,rh){ stopAll(); $('dots').setAttribute('opacity',0); $('hR').textContent='interest '+f(rh,2)+'%'; $('fR').textContent='interest '+f(rf,2)+'%';
-    setJar('h',1000,1000,money(1000)+' '+mode.ol); setJar('f',1000*mode.base,1000,money(1000*mode.base)+' '+mode.hl,'(swapped at '+rateTxt(mode.base)+')'); $('xr').textContent='1 '+mode.ol+' = '+rateTxt(mode.base)+' '+mode.hl; }
+    setJar('h',1000,1000,money(1000)+' '+mode.ol); setJar('f',1000*mode.base,1000,money(1000*mode.base)+' '+mode.hl,'(swapped at '+rateTxt(mode.base)+')'); setXr(mode.base); }
   function play(rf,rh,nofall,after){ reset(rf,rh); const B=mode.base, hEnd=1000*(1+rh/100), fEnd=1000*B*(1+rf/100), rEnd=nofall?B:B*(1+rf/100)/(1+rh/100);
     seq([n=>tween(1200,t=>{ setJar('h',0,lerp(1000,hEnd,t),money(lerp(1000,hEnd,t))+' '+mode.ol); const fa=lerp(1000*B,fEnd,t); setJar('f',fa,fa/B,money(fa)+' '+mode.hl,'after '+Math.round(t*12)+' months'); },n),
-         n=>{ $('cap').innerHTML='A year later the host jar is bigger in host currency. Now swap it back home…'; tween(1100,t=>{ const r=lerp(B,rEnd,t); $('xr').textContent='1 '+mode.ol+' = '+rateTxt(r)+' '+mode.hl; const he=fEnd/r; setJar('f',fEnd,he,'= '+money(he)+' '+mode.ol,money(fEnd)+' '+mode.hl+' swapped back'); },n); },
-         n=>{ const fin=fEnd/rEnd; if(!nofall){ $('cap').innerHTML=`The host jar earned more interest (<b>${f(rf,2)}%</b> against <b>${f(rh,2)}%</b>), but the host currency fell by about the gap (<b>${f(rf-rh,1)}%</b>). Both jars end at about <b>${money(hEnd)} ${esc(mode.ol)}</b>. The extra interest was cancelled out. That is the IFE.`; if(after) after(); return; }
-              $('cap').innerHTML=`If the host currency did not fall, the host jar would win: <b>${money(fin)}</b> against <b>${money(hEnd)}</b>. Free money…`;
-              $('dots').setAttribute('opacity',1); tween(1400,t=>{ $('dots').setAttribute('transform',`translate(${lerp(0,360,t)},0)`); },n); },
-         ()=>{ $('cap').innerHTML='…so everyone would borrow at home and save in the host country. Markets do not leave free money lying around. Prices adjust until the extra interest is cancelled out by an <b>expected fall in the host currency</b>. So, on average, the host currency is expected to be about <b>'+f(rf-rh,1)+'% weaker</b>.'; if(after) after(); }]); }
+         n=>{ $('cap').innerHTML='A year later the host jar is bigger in host currency. Now swap it back home…'; tween(1100,t=>{ const r=lerp(B,rEnd,t); setXr(r); const he=fEnd/r; setJar('f',fEnd,he,'= '+money(he)+' '+mode.ol,money(fEnd)+' '+mode.hl+' swapped back'); },n); },
+         n=>{ const fin=fEnd/rEnd, up=rf>=rh, hi=up?'host':'home', lo=up?'home':'host', gap=f(Math.abs(rf-rh),1);
+              if(!nofall){ $('cap').innerHTML=Math.abs(rf-rh)<0.005?`Same interest in both places, so the exchange rate is not expected to move. Both jars end at about <b>${money(hEnd)} ${esc(mode.ol)}</b>.`:`The ${hi} jar earned more interest (<b>${f(Math.max(rf,rh),2)}%</b> against <b>${f(Math.min(rf,rh),2)}%</b>), but the host currency got ${up?'weaker':'stronger'} by about the gap (<b>${gap}%</b>). Both jars end at about <b>${money(hEnd)} ${esc(mode.ol)}</b>. The extra interest was cancelled out. That is the IFE.`; if(after) after(); return; }
+              $('cap').innerHTML=`If the exchange rate did not move, the ${hi} jar would win: <b>${money(up?fin:hEnd)}</b> against <b>${money(up?hEnd:fin)}</b>. Free money…`;
+              $('dots').setAttribute('opacity',1); tween(1400,t=>{ $('dots').setAttribute('transform',`translate(${up?lerp(0,360,t):lerp(360,0,t)},0)`); },n); },
+         ()=>{ const up=rf>=rh; $('cap').innerHTML='…so everyone would borrow in the '+(up?'home':'host')+' country and save in the '+(up?'host':'home')+' country. Markets do not leave free money lying around. Prices adjust until the extra interest is cancelled out by an <b>expected change in the exchange rate</b>. So, on average, the host currency is expected to be about <b>'+f(Math.abs(rf-rh),1)+'% '+(up?'weaker':'stronger')+'</b>.'; if(after) after(); }]); }
   let changed=false; reset(12,2);
   $('bPlay').onclick=()=>{ mode={base:5,hl:'host',ol:'home'}; play(sliderVal('sF'),sliderVal('sR'),$('nf').checked); markLab('l2','watched'); if(changed||$('nf').checked) markLab('l2','played'); };
   wireSlider('sF',()=>{changed=true;}); wireSlider('sR',()=>{changed=true;}); $('nf').onchange=()=>{changed=true;};
   $('bMine').onclick=()=>{ const v=readMy([['B19'],['B20']],'mineOut'); if(!v) return; const d=v.B19-v.B20;
     mode={base:(S.calc.B16>0?S.calc.B16:5),hl:co.hostCur,ol:co.homeCur}; setSlider('sF',v.B19); setSlider('sR',v.B20); $('nf').checked=false;
     play(v.B19,v.B20,false); $('sv').scrollIntoView({behavior:RM?'auto':'smooth',block:'center'});
-    $('mineOut').innerHTML=`<div class="note">Your IFE number (cell <b>B24</b>) = ${f(v.B19,2)} − ${f(v.B20,2)} = <b>${fs(d,2)}%</b>. The IFE expects 1 ${esc(co.homeCur)} to buy about ${f(Math.abs(d),1)}% ${d>=0?'more':'less'} ${esc(co.hostCur)} next year.<br><b>For ${esc(co.name)}:</b> borrowing in ${esc(co.homeCur)} at ${f(v.B20,2)}% looks cheaper than ${f(v.B19,2)}% in ${esc(co.hostCur)}. But if the ${esc(co.hostCur)} falls as the IFE expects, the loan ends up costing about the same, and in a bad year much more.</div>`;
+    const loan=d>=0?`borrowing in ${esc(co.homeCur)} at ${f(v.B20,2)}% looks cheaper than ${f(v.B19,2)}% in ${esc(co.hostCur)}. But your sales are in ${esc(co.hostCur)}. If the value of the ${esc(co.hostCur)} falls as the IFE expects, each repayment needs more ${esc(co.hostCur)}. The loan ends up costing about the same, and in a bad year much more.`:`borrowing in ${esc(co.hostCur)} at ${f(v.B19,2)}% looks cheaper than ${f(v.B20,2)}% in ${esc(co.homeCur)}. But if the value of the ${esc(co.hostCur)} rises as the IFE expects, each repayment costs more ${esc(co.homeCur)}. The loan ends up costing about the same.`;
+    $('mineOut').innerHTML=`<div class="note">Your IFE number (cell <b>B24</b>) = ${f(v.B19,2)} − ${f(v.B20,2)} = <b>${fs(d,2)}%</b>. The IFE expects 1 ${esc(co.homeCur)} to buy about ${f(Math.abs(d),1)}% ${d>=0?'more':'less'} ${esc(co.hostCur)} next year.<br><b>For ${esc(co.name)}:</b> ${loan}</div>`;
     markLab('l2','mine'); };
   wireQuick('l2',1,'The gap is 15 − 3 = 12. The extra interest is cancelled out by a host currency that is expected to be about 12% weaker.'); wireNav(2);
 }
@@ -682,29 +692,31 @@ function vLab3(){
   ${labNav(3)}</div>`;
   const sv=$('sv'); const W0=60,W1=600;
   function draw(r,i,pg,pr,lab){ while(sv.firstChild) sv.removeChild(sv.firstChild);
-    const lo=Math.min(0,r-i)-5, hi=Math.max(r,i,10)+5; const X=v=>W0+(v-lo)/(hi-lo)*(W1-W0);
+    const lo=Math.min(0,r,r-i)-5, hi=Math.max(r,i,r-i,10)+5; const X=v=>W0+(v-lo)/(hi-lo)*(W1-W0);
     el('line',{x1:W0,y1:190,x2:W1,y2:190,stroke:'#5b6478','stroke-width':2},sv);
     const step=hi-lo>120?50:(hi-lo>50?20:(hi-lo>20?10:5)); for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step){ el('line',{x1:X(v),y1:186,x2:X(v),y2:194,stroke:'#5b6478'},sv); el('text',{x:X(v),y:212,'text-anchor':'middle','font-size':12,fill:'#5b6478'},sv,v+'%'); }
     el('line',{x1:X(0),y1:30,x2:X(0),y2:190,stroke:'#0b2545','stroke-dasharray':'4 4','stroke-width':1.5},sv);
-    const gw=(X(r)-X(0))*pg; el('rect',{x:X(0),y:52,width:Math.max(0,gw),height:36,rx:5,fill:'#1d6b3a'},sv);
+    const g1=X(0)+(X(r)-X(0))*pg; el('rect',{x:Math.min(X(0),g1),y:52,width:Math.abs(g1-X(0)),height:36,rx:5,fill:'#1d6b3a'},sv);
     el('text',{x:X(0)+6,y:44,'font-size':13,'font-weight':700,fill:'#1d6b3a'},sv,'Interest rate '+f(r,2)+'%');
-    if(pr>0){ const rw=(X(r)-X(r-i))*pr; el('rect',{x:X(r)-rw,y:100,width:rw,height:36,rx:5,fill:'#b42318',opacity:.85},sv);
-      if(pr>=1) el('text',{x:Math.max(X(r)-8,X(r)-rw+120),y:123,'text-anchor':'end','font-size':13,'font-weight':700,fill:'#ffffff'},sv,'Inflation eats '+f(i,1)+'%'); }
+    if(pr>0){ const e1=X(r)+(X(r-i)-X(r))*pr, a=Math.min(X(r),e1), b=Math.max(X(r),e1); el('rect',{x:a,y:100,width:b-a,height:36,rx:5,fill:'#b42318',opacity:.85},sv);
+      if(pr>=1){ const t=el('text',{x:b-8,y:123,'text-anchor':'end','font-size':13,'font-weight':700,fill:'#ffffff'},sv,(i>=0?'Inflation eats ':'Falling prices add ')+f(Math.abs(i),1)+'%');
+        let w=0; try{ w=t.getComputedTextLength(); }catch(e){}
+        if(w+16>b-a){ if(b+8+w<=W1+30){ t.setAttribute('x',b+8); t.setAttribute('text-anchor','start'); } else { t.setAttribute('x',a-8); } t.setAttribute('fill','#b42318'); } } }
     if(lab){ const rr=r-i, xr=X(rr); el('line',{x1:xr,y1:40,x2:xr,y2:190,stroke:rr>=0?'#1d6b3a':'#b42318','stroke-width':4},sv);
-      const tx=Math.min(Math.max(xr,W0+90),W1-90); el('rect',{x:tx-88,y:160,width:176,height:0},sv);
-      el('text',{x:tx,y:178,'text-anchor':'middle','font-size':16,'font-weight':800,fill:rr>=0?'#1d6b3a':'#b42318'},sv,'Real rate: '+fs(rr,2)+'%'); } }
+      const t=el('text',{x:xr+10,y:178,'text-anchor':'start','font-size':16,'font-weight':800,fill:rr>=0?'#1d6b3a':'#b42318'},sv,'Real rate: '+fs(rr,2)+'%');
+      let w=0; try{ w=t.getComputedTextLength(); }catch(e){} if(xr+10+w>W1+30){ t.setAttribute('x',xr-10); t.setAttribute('text-anchor','end'); } } }
   function play(r,i,who){ stopAll(); draw(r,i,0,0,false);
     seq([n=>tween(800,t=>draw(r,i,t,0,false),n), n=>tween(800,t=>draw(r,i,1,t,false),n),
-      ()=>{ draw(r,i,1,1,true); const rr=r-i; $('cap').innerHTML=(who?'<b>'+esc(who)+':</b> ':'')+`${f(r,2)}% − ${f(i,1)}% = <b>${fs(rr,2)}%</b>. `+(rr>=0?'Positive: savers are rewarded, so the currency is attractive, but borrowing there is expensive.':'Negative: savers lose money every year, so people try to move money out of the currency. In Türkiye in 2022, the lira lost about 29% of its value against the dollar.'); }]); }
+      ()=>{ draw(r,i,1,1,true); const rr=r-i; $('cap').innerHTML=(who?'<b>'+esc(who)+':</b> ':'')+`${f(r,2)}% − ${f(i,1)}% = <b>${fs(rr,2)}%</b>. `+(rr>=0?'Positive: savers are rewarded, so the currency is attractive, but borrowing there is expensive.':'Negative: savers lose money every year, so people try to move money out of the currency.'+(who&&/Türkiye/.test(who)?' In 2022, the lira lost about 29% of its value against the US dollar.':'')); }]); }
   let changed=false; draw(10,4,0,0,false);
   $('bPlay').onclick=()=>{ play(sliderVal('sI'),sliderVal('sP')); markLab('l3','watched'); if(changed) markLab('l3','played'); };
   wireSlider('sI',()=>{changed=true;}); wireSlider('sP',()=>{changed=true;});
   $('pBR').onclick=()=>{ setSlider('sI',13.75); setSlider('sP',4.1); play(13.75,4.1,'Brazil'); markLab('l3','watched'); markLab('l3','played'); };
   $('pTR').onclick=()=>{ setSlider('sI',10.5); setSlider('sP',85.5); play(10.5,85.5,'Türkiye, October 2022'); markLab('l3','watched'); markLab('l3','played'); };
   const F=[['B19'],['B17'],['B20'],['B18']];
-  $('bMine').onclick=()=>{ const v=readMy(F,'mineOut'); if(!v) return; setSlider('sI',v.B19); setSlider('sP',v.B17); play(v.B19,v.B17,cname(co.host));
+  $('bMine').onclick=()=>{ const v=readMy(F,'mineOut'); if(!v) return; setSlider('sI',v.B19); setSlider('sP',v.B17); play(v.B19,v.B17,cname(co.host)); $('sv').scrollIntoView({behavior:RM?'auto':'smooth',block:'center'});
     $('mineOut').innerHTML=`<div class="note">Your host real interest rate (cell <b>B25</b>) = ${f(v.B19,2)} − ${f(v.B17,2)} = <b>${fs(v.B19-v.B17,2)}%</b>. Your home real rate (cell <b>B26</b>) = <b>${fs(v.B20-v.B18,2)}%</b>.</div>`; markLab('l3','mine'); };
-  $('bMineH').onclick=()=>{ const v=readMy(F,'mineOut'); if(!v) return; setSlider('sI',v.B20); setSlider('sP',v.B18); play(v.B20,v.B18,cname(co.home)); markLab('l3','mine'); };
+  $('bMineH').onclick=()=>{ const v=readMy(F,'mineOut'); if(!v) return; setSlider('sI',v.B20); setSlider('sP',v.B18); play(v.B20,v.B18,cname(co.home)); $('sv').scrollIntoView({behavior:RM?'auto':'smooth',block:'center'}); markLab('l3','mine'); };
   wireQuick('l3',1,'10 − 12 = −2%. Savers lose money each year, even though their savings grow in number.'); wireNav(3);
 }
 
@@ -714,11 +726,11 @@ function vLab4(){
   app.innerHTML=`<div class="lab"><h1>Lab 4 · Predictions vs reality: the forecast fan</h1>${stepper('l4')}
   <p class="lead">PPP and the IFE are <b>signals</b>, not forecasts. Real currency moves are often much bigger. That is why your pricing note needs a <b>range</b>, a <b>stress test</b> and a <b>plan B</b>.</p>
   <div class="card"><h3>1 · Predict, then reveal</h3>
-   <p id="scen"><b>Brazil, 2020: reais per euro.</b> At the start of the year, PPP pointed to about +3% (inflation 3.2% in Brazil, about 0% in Italy) and the IFE to about +5% (Selic 4.5%, ECB −0.5%).</p>
+   <p id="scen"><b>Brazil, 2020: reais per euro (yearly average).</b> Even using the inflation that really happened in 2020 (3.2% in Brazil, about 0% in Italy), PPP pointed to only about +3%. Interest rates at the start of the year (Selic 4.5%, ECB −0.5%) gave an IFE of about +5%.</p>
    <svg id="sv" viewBox="0 0 640 330" role="img" aria-label="A fan chart from today to next year with PPP and IFE arrows, your guess, and what really happened"></svg>
-   <div class="ctrl"><div><label for="sG">Your guess: how many % more reais for €1 at the end of the year? <output id="oG">4</output>%</label><input type="range" id="sG" min="0" max="45" step="0.5" value="4"></div><div class="small">You can also drag the blue circle on the chart.</div></div>
+   <div class="ctrl"><div><label for="sG">Your guess: how many % more reais for €1 in 2020 than in 2019? <output id="oG">4</output>%</label><input type="range" id="sG" min="0" max="45" step="0.5" value="4"></div><div class="small">You can also drag the blue circle on the chart.</div></div>
    <div class="caption" id="cap">Drag the blue circle (or the slider) to where you think it ended, then press <b>Reveal</b>.</div>
-   <div class="btns"><button id="bRev" type="button">Reveal what happened</button><button class="ghost" id="pAR" type="button">Argentina, Dec 2023</button><button class="ghost" id="pEG" type="button">Egypt, Mar 2024</button></div>
+   <div class="btns"><button id="bRev" type="button">Reveal what happened</button><button class="ghost" id="pBR4" type="button">Brazil, 2020</button><button class="ghost" id="pAR" type="button">Argentina, Dec 2023</button><button class="ghost" id="pEG" type="button">Egypt, Mar 2024</button></div>
   </div>
   <div class="card"><h3>3 · Now your own fan</h3><p>From your Excel file. Your fan uses your PPP (B23), your IFE (B24) and your worst year (B21) as the stress test.</p>
    ${myInputs([['B17','Host inflation forecast (%)'],['B18','Home inflation forecast (%)'],['B19','Host policy rate (%)'],['B20','Home policy rate (%)'],['B21','Worst one-year change in your data (%)']])}
@@ -727,7 +739,8 @@ function vLab4(){
   ${essayBox(`<p><b>Recommendations.</b> The brief says: "Include a short FX/pricing note using PPP/IFE scenarios (assumptions made explicit)." The top band of the rubric asks you to address "potential risks" and outline "contingency measures".</p><p><b>Your pricing note checklist:</b></p><ol style="margin:0 0 0 20px"><li><b>Range:</b> your PPP price (B29) to your IFE price (B30).</li><li><b>Stress test:</b> your worst-year price (B31).</li><li><b>Assumptions:</b> where your forecasts and rates come from, and the date.</li><li><b>Plan B:</b> what ${esc(co.name)} would do if the stress test happened.</li></ol><p>Essay table 1 (tool 4) sets these out for you.</p>`)}
   ${labNav(4)}</div>`;
   const sv=$('sv'); const X0=90,X1=540,Y0=290,Y1=36;
-  let sc={ppp:3,ife:5,act:33.3,ymax:45,unit:'reais per €1',label:'What happened: +33.3%',fan:true,stressLbl:null};
+  const BR={ppp:3,ife:5,act:33.3,ymax:45,unit:'reais per €1',label:'What happened: +33.3%',fan:true,stressLbl:null,text:'<b>Brazil, 2020: reais per euro (yearly average).</b> Even using the inflation that really happened in 2020 (3.2% in Brazil, about 0% in Italy), PPP pointed to only about +3%. Interest rates at the start of the year (Selic 4.5%, ECB −0.5%) gave an IFE of about +5%.'};
+  let sc=Object.assign({},BR);
   let guess=4, revealed=false, ap=0;
   const Y=v=>Y0-(v-sc.ymin)/(sc.ymax-sc.ymin)*(Y0-Y1);
   function fixMin(){ sc.ymin=Math.min(0,sc.ppp||0,sc.ife||0,sc.act||0)-2; }
@@ -737,13 +750,14 @@ function vLab4(){
     el('text',{x:X0,y:Y0+28,'text-anchor':'middle','font-size':13,'font-weight':700,fill:'#0b2545'},sv,'Today');
     el('text',{x:X1,y:Y0+28,'text-anchor':'middle','font-size':13,'font-weight':700,fill:'#0b2545'},sv,'One year later');
     if(sc.fan){ el('polygon',{points:`${X0},${Y(0)} ${X1},${Y(sc.ppp)} ${X1},${Y(sc.ife)}`,fill:'#13657a',opacity:.15},sv);
-      [['PPP',sc.ppp,'#13657a'],['IFE',sc.ife,'#0b2545']].forEach(a=>{ el('line',{x1:X0,y1:Y(0),x2:X1,y2:Y(a[1]),stroke:a[2],'stroke-width':3},sv); el('text',{x:X1+8,y:Y(a[1])+(a[0]==='PPP'&&Math.abs(Y(sc.ppp)-Y(sc.ife))<16?14:4),'font-size':13,'font-weight':700,fill:a[2]},sv,a[0]+' '+fs(a[1],1)+'%'); });
-      el('text',{x:(X0+X1)/2,y:Y((sc.ppp+sc.ife)/2)+30,'text-anchor':'middle','font-size':12,fill:'#13657a'},sv,'planning range'); }
+      const close=Math.abs(Y(sc.ppp)-Y(sc.ife))<16, pppTop=Y(sc.ppp)<=Y(sc.ife);
+      [['PPP',sc.ppp,'#13657a'],['IFE',sc.ife,'#0b2545']].forEach(a=>{ el('line',{x1:X0,y1:Y(0),x2:X1,y2:Y(a[1]),stroke:a[2],'stroke-width':3},sv); const top=(a[0]==='PPP')===pppTop; el('text',{x:X1+8,y:Y(a[1])+(close?(top?-4:12):4),'font-size':13,'font-weight':700,fill:a[2]},sv,a[0]+' '+fs(a[1],1)+'%'); });
+      const tq=0.72, ya=lerp(Y(0),Y(sc.ppp),tq), yb=lerp(Y(0),Y(sc.ife),tq); el('text',{x:lerp(X0,X1,tq),y:Math.abs(ya-yb)>34?(ya+yb)/2+4:Math.max(ya,yb)+24,'text-anchor':'middle','font-size':12,fill:'#13657a'},sv,'planning range'); }
     if(sc.stressLbl==null){ const gy=Y(guess); el('circle',{cx:X1,cy:gy,r:11,fill:'#fff',stroke:'#1f5fbf','stroke-width':4,id:'gc',style:'cursor:grab'},sv); el('text',{x:X1-18,y:gy-14,'text-anchor':'end','font-size':12,'font-weight':700,fill:'#1f5fbf'},sv,'Your guess'); }
     if(ap>0&&sc.act!=null){ const ax=lerp(X0,X1,ap), ay=lerp(Y(0),Y(sc.act),ap); el('line',{x1:X0,y1:Y(0),x2:ax,y2:ay,stroke:sc.stressLbl?'#e6550d':'#b42318','stroke-width':3,'stroke-dasharray':'6 4'},sv);
       el('path',{d:`M${ax} ${ay-10} L${ax+10} ${ay} L${ax} ${ay+10} L${ax-10} ${ay} Z`,fill:sc.stressLbl?'#e6550d':'#b42318'},sv);
       if(ap>=1) el('text',{x:X1-16,y:ay-14,'text-anchor':'end','font-size':13,'font-weight':800,fill:sc.stressLbl?'#e6550d':'#b42318'},sv,sc.stressLbl||sc.label); } }
-  function setGuess(v){ if(!isFinite(v)) return; if(sc.ymin==null) fixMin(); guess=Math.max(sc.ymin,Math.min(sc.ymax,v)); $('sG').value=guess; $('oG').textContent=f(guess,1); if(!revealed) draw(); }
+  function setGuess(v){ if(!isNum(v)) return; if(sc.ymin==null) fixMin(); guess=Math.max(sc.ymin,Math.min(sc.ymax,v)); $('sG').value=guess; $('oG').textContent=f(guess,1); if(!revealed) draw(); }
   function ptY(e){ const p=sv.createSVGPoint(); p.x=e.clientX; p.y=e.clientY; const q=p.matrixTransform(sv.getScreenCTM().inverse()); return sc.ymin+(Y0-q.y)/(Y0-Y1)*(sc.ymax-sc.ymin); }
   let drag=false; sv.addEventListener('pointerdown',e=>{ if(revealed||sc.stressLbl) return; drag=true; sv.setPointerCapture(e.pointerId); setGuess(ptY(e)); });
   sv.addEventListener('pointermove',e=>{ if(drag) setGuess(ptY(e)); }); sv.addEventListener('pointerup',()=>{ drag=false; });
@@ -753,13 +767,14 @@ function vLab4(){
   $('bRev').onclick=()=>{ if(sc.stressLbl){ return; } markLab('l4','watched'); reveal(()=>{ const miss=sc.act-guess;
     $('cap').innerHTML=(sc.fan?`Your guess: <b>${fs(guess,1)}%</b>. What happened: <b>${fs(sc.act,1)}%</b>. The real move was far outside the PPP–IFE range. <b>Signals are not forecasts.</b> So plan with a range and test a bad year.`:`Your guess: <b>${fs(guess,1)}%</b>. What happened: <b>${fs(sc.act,0)}%</b>, ${sc.when}. No forecast warned of a move this big, this fast.`)+(Math.abs(miss)<3?' You were close: well done.':''); }); };
   function preset(p){ revealed=false; ap=0; sc=p; fixMin(); $('sG').max=String(p.ymax); $('scen').innerHTML=p.text; setGuess(Math.min(guess,p.ymax)); $('cap').innerHTML='Make your guess, then press <b>Reveal</b>.'; draw(); markLab('l4','played'); }
+  $('pBR4').onclick=()=>preset(Object.assign({},BR));
   $('pAR').onclick=()=>preset({ppp:null,ife:null,act:118,ymax:140,fan:false,label:'+118% overnight',when:'overnight on 13 December 2023',stressLbl:null,text:'<b>Argentina, December 2023: pesos per US dollar.</b> The new government moved the official rate from 366.5 to 800 overnight.'});
   $('pEG').onclick=()=>preset({ppp:null,ife:null,act:62,ymax:80,fan:false,label:'about +62% in a day',when:'on 6 March 2024',stressLbl:null,text:'<b>Egypt, March 2024: pounds per US dollar.</b> Egypt had held the pound at about 30.85 per dollar. When it let the rate go, the pound fell to about 50.'});
   $('bMine').onclick=()=>{ const v=readMy([['B17'],['B18'],['B19'],['B20'],['B21']],'mineOut'); if(!v) return; const ppp=v.B17-v.B18, ife=v.B19-v.B20, st=v.B21;
-    revealed=true; ap=0; sc={ppp:ppp,ife:ife,act:st,ymax:Math.max(10,ppp,ife,st)*1.2,fan:true,stressLbl:'Stress test (your worst year) '+fs(st,1)+'%'};
-    $('scen').innerHTML='<b>Your fan: '+esc(co.hostCur)+' per 1 '+esc(co.homeCur)+', next year.</b>'; $('cap').innerHTML='Your planning range runs from PPP to IFE. The orange marker is your stress test: what if your worst year happened again?';
-    tween(1200,t=>{ ap=t; draw(); },()=>{ ap=1; draw(); });
-    let prices=''; if(allOk()){ const c=S.calc; prices=`<br>Your prices for ${esc(co.product)}: range <b>${money(c.B29)}–${money(c.B30)} ${esc(co.hostCur)}</b> (B29–B30); stress test <b>${money(c.B31)} ${esc(co.hostCur)}</b> (B31).`; }
+    revealed=true; ap=0; sc={ppp:ppp,ife:ife,act:st,ymax:Math.max(10,ppp,ife,st)*1.2,fan:true,stressLbl:'Stress test '+fs(st,1)+'%'};
+    $('scen').innerHTML='<b>Your fan: '+esc(co.hostCur)+' per 1 '+esc(co.homeCur)+', next year.</b>'; $('cap').innerHTML='Your planning range runs from PPP to IFE. The orange marker is your stress test: what if your worst year (B21) happened again?';
+    tween(1200,t=>{ ap=t; draw(); },()=>{ ap=1; draw(); }); $('sv').scrollIntoView({behavior:RM?'auto':'smooth',block:'center'});
+    let prices=''; if(allOk()){ const c=S.calc; prices=`<br>Your prices for ${esc(co.product)}: range <b>${money(Math.min(c.B29,c.B30))}–${money(Math.max(c.B29,c.B30))} ${esc(co.hostCur)}</b> (B29 and B30); stress test <b>${money(c.B31)} ${esc(co.hostCur)}</b> (B31).`; }
     else prices='<br><span class="small">Finish the Excel checker (tool 2) to see your three prices here.</span>';
     $('mineOut').innerHTML=`<div class="note">Planning range: <b>${fs(Math.min(ppp,ife),2)}% to ${fs(Math.max(ppp,ife),2)}%</b>. Stress test: <b>${fs(st,1)}%</b>.${prices}</div>`; markLab('l4','mine'); markLab('l4','played'); };
   wireQuick('l4',1,'The brief asks for "PPP/IFE scenarios (assumptions made explicit)". Signals disagree and real moves are often bigger, so give a range, test a bad year, and say what you would do.'); wireNav(4);
@@ -777,12 +792,13 @@ const GROUPS=[['Political','pol'],['Legal','leg']];
 function rowVals(k,y){ const h=hv(k,y,'host'), o=hv(k,y,'home'), b=hv(k,2017,'host');
   return {h:h?h.v:NaN, o:o?o.v:NaN, gap:(h&&o)?h.v-o.v:NaN, gr:gapRealY(k,y), tr:(h&&b&&!h.typed)?h.v-b.v:NaN, typed:!!(h&&h.typed), hd:h, od:o}; }
 function grTxt(gr){ return gr==='lower'?'Yes, lower':gr==='higher'?'Yes, higher':gr==='unclear'?'Not clear':'—'; }
+function wgiCite(){ const s=S.src||{}; return 'World Bank, '+yr(s.wgiDate||(S.wgi&&S.wgi.date)||'')+'b'; }
 function factText(k,y){ const co=S.co, w=WGI.find(x=>x.k===k), r=rowVals(k,y);
-  let t=cname(co.host)+' scores '+f(r.h)+'/100 on '+w.name.toLowerCase()+' in '+y+(isFinite(r.o)?', against '+f(r.o)+' for '+cname(co.home):'')+' (World Bank, 2026)';
+  let t=cname(co.host)+' scores '+f(r.h)+'/100 on '+w.name.toLowerCase()+' in '+y+(isNum(r.o)?', against '+f(r.o)+' for '+cname(co.home):'')+' ('+wgiCite()+')';
   if(r.gr==='lower'||r.gr==='higher') t+='; the gap is real, because the two 90% ranges do not overlap'; else if(r.gr==='unclear') t+='; the two 90% ranges overlap, so the gap may not be real';
   return t+'.'; }
 function legendHTML(){ const lab=['80–100','60–80','40–60','20–40','0–20']; return '<div class="legend">Key: '+SHADES.slice().reverse().map((c,i)=>`<i style="background:${c}"></i>${lab[i]}`).join(' ')+' &nbsp;<b>Darker = weaker score = more risk.</b></div>'; }
-let HPREV={};
+let HPREV={}, HOSTMSG=null;
 function vHeat(){
   if(!setupDone()) return go('company');
   const co=S.co, h=S.heat, y=heatYear(), host=esc(cname(co.host)), home=esc(cname(co.home));
@@ -796,6 +812,7 @@ function vHeat(){
       <div class="field"><label for="hHome">Home</label><select id="hHome">${countryOptions(co.home)}</select></div>
       <div class="field"><label for="hYear">Year</label><select id="hYear">${YEARS.map(v=>`<option value="${v}" ${v===y?'selected':''}>${v}</option>`).join('')}</select></div>
     </div>
+    ${HOSTMSG?`<div class="warn" id="hostMsg"><b>You changed your ${HOSTMSG.home?'home':'host'} country from ${esc(cname(HOSTMSG.from))} to ${esc(cname(HOSTMSG.to))}.</b> This changes it in every tool. Your ${HOSTMSG.home?'home':'host'} currency is still "${esc(HOSTMSG.home?co.homeCur:co.hostCur)}", and your Excel numbers are still the old ones. <button type="button" class="quiet" id="bFixCo">Check my company details</button></div>`:''}
     <div class="tabs"><button type="button" id="tMap" class="${h.view!=='trend'?'on':''}">Map: one year</button><button type="button" id="tTrend" class="${h.view==='trend'?'on':''}">Trend: 2017–2025</button><button type="button" class="ghost" id="bPlayY">▶ Play 2017 → 2025</button></div>
     <div id="mapBox" style="overflow-x:auto"></div>${legendHTML()}
     ${missing.length?`<div class="warn" style="margin-top:12px">The World Bank has no score for ${missing.map(x=>x.name.toLowerCase()).join(' or ')} in ${host}. Type the latest score from the World Bank page if you need it: ${missing.map(x=>`<label style="display:inline-block;margin:4px 10px 0 0">${x.name} <input class="num" style="max-width:90px" type="text" id="ty${x.k}" value="${esc(S.wgi.host[x.k]||'')}"></label> <a href="${wgiLink(x.k,co.host)}" target="_blank" rel="noopener">look up ↗</a>`).join(' ')}</div>`:''}
@@ -812,10 +829,10 @@ function vHeat(){
   <div class="card"><h3>Download</h3><div class="btns"><button type="button" id="dPng">Download heat map (.png)</button><button type="button" class="ghost" id="dWord" data-label="Copy heat map for Word">Copy heat map for Word</button><button type="button" class="ghost" id="dTrend">Download trend map (.png)</button></div>
   <p class="small">An optional extra figure for your Political, Legal &amp; Cultural section. It does <b>not</b> replace your two Excel figures. Number it (e.g. "Figure 3"), refer to it in your text, and cite the World Bank.</p></div>
   <div class="btns"><button class="quiet" type="button" id="bBackM">← My toolkit</button><button type="button" id="bNextT">Next: Essay tables →</button></div>`;
-  HPREV={}; drawMapBox(false); drawDetail(false); drawSpot(); drawFrames();
+  HPREV={}; HOSTMSG=null; const fx=$('bFixCo'); if(fx) fx.onclick=()=>go('company'); drawMapBox(false); drawDetail(false); drawSpot(); drawFrames();
   $('hYear').onchange=()=>{ stopAll(); setYear(parseInt($('hYear').value,10),true); };
-  $('hHost').onchange=()=>{ const v=$('hHost').value; if(!v||v===S.co.home) return; S.co.host=v; S.heat.year=null; S.heat.pol=null; S.heat.leg=null; S.heat.checks={}; persist(); vHeat(); renderSide(); };
-  $('hHome').onchange=()=>{ const v=$('hHome').value; if(!v||v===S.co.host) return; S.co.home=v; persist(); vHeat(); };
+  $('hHost').onchange=()=>{ const v=$('hHost').value; if(!v||v===S.co.home){ $('hHost').value=S.co.host; return; } const old=S.co.host; S.co.host=v; S.heat.year=null; S.heat.pol=null; S.heat.leg=null; S.heat.checks={}; persist(); HOSTMSG={from:old,to:v}; vHeat(); renderSide(); };
+  $('hHome').onchange=()=>{ const v=$('hHome').value; if(!v||v===S.co.host){ $('hHome').value=S.co.home; return; } const old=S.co.home; S.co.home=v; persist(); HOSTMSG={from:old,to:v,home:true}; vHeat(); renderSide(); };
   $('tMap').onclick=()=>{ S.heat.view='map'; persist(); $('tMap').classList.add('on'); $('tTrend').classList.remove('on'); HPREV={}; drawMapBox(false); };
   $('tTrend').onclick=()=>{ stopAll(); S.heat.view='trend'; persist(); $('tTrend').classList.add('on'); $('tMap').classList.remove('on'); drawMapBox(false); };
   $('bPlayY').onclick=()=>{ stopAll(); S.heat.view='map'; $('tMap').classList.add('on'); $('tTrend').classList.remove('on'); HPREV={}; let i=0; setYear(YEARS[0],false);
@@ -831,7 +848,7 @@ function drawMapBox(anim){
   const box=$('mapBox'); if(!box) return; const co=S.co, y=heatYear(); const host=esc(cname(co.host)), home=esc(cname(co.home));
   if(S.heat.view==='trend'){
     box.innerHTML=`<table class="hmt trend"><thead><tr><th>${host}</th>${YEARS.map(v=>`<th style="text-align:center">${v}</th>`).join('')}</tr></thead><tbody>`+
-      GROUPS.map(g=>`<tr><td class="grp" colspan="10">${g[0]}</td></tr>`+WGI.filter(w=>w.dim===g[0]).map(w=>`<tr class="row" data-k="${w.k}"><td class="lab">${w.name}</td>${YEARS.map(v=>{ const d=hv(w.k,v,'host'); const val=d?d.v:NaN; return `<td class="c" style="background:${shade(val)};color:${shadeText(val)}">${isFinite(val)?f(val,0):'—'}</td>`; }).join('')}</tr>`).join('')).join('')+
+      GROUPS.map(g=>`<tr><td class="grp" colspan="10">${g[0]}</td></tr>`+WGI.filter(w=>w.dim===g[0]).map(w=>`<tr class="row" data-k="${w.k}"><td class="lab">${w.name}</td>${YEARS.map(v=>{ const d=hv(w.k,v,'host'); const val=d?d.v:NaN; return `<td class="c" style="background:${shade(val)};color:${shadeText(val)}">${isNum(val)?f(val,0):'—'}</td>`; }).join('')}</tr>`).join('')).join('')+
       `</tbody></table><p class="small">Reading tip: a row that gets <b>darker</b> from left to right is a risk that is growing.</p>`;
   } else {
     if(!box.querySelector('table.one')){
@@ -839,11 +856,11 @@ function drawMapBox(anim){
         GROUPS.map(g=>`<tr><td class="grp" colspan="6">${g[0]}</td></tr>`+WGI.filter(w=>w.dim===g[0]).map(w=>`<tr class="row ${S.heat.open===w.k?'sel':''}" data-k="${w.k}" tabindex="0"><td class="lab">${w.name}${S.heat.pol===w.k||S.heat.leg===w.k?' <span class="badge">chosen</span>':''}</td><td class="c" id="ch${w.k}"></td><td class="c" id="co${w.k}"></td><td class="r" id="cg${w.k}"></td><td id="cr${w.k}"></td><td class="r" id="ct${w.k}"></td></tr>`).join('')).join('')+`</tbody></table>`;
     }
     WGI.forEach(w=>{ const r=rowVals(w.k,y); const p=HPREV[w.k]||{h:r.h,o:r.o};
-      const paint=(t)=>{ const hh=isFinite(p.h)&&isFinite(r.h)?lerp(p.h,r.h,t):r.h, oo=isFinite(p.o)&&isFinite(r.o)?lerp(p.o,r.o,t):r.o;
-        const ch=$('ch'+w.k), cO=$('co'+w.k); if(!ch) return; ch.textContent=isFinite(hh)?f(hh)+(r.typed?'*':''):'—'; cO.textContent=isFinite(oo)?f(oo):'—'; };
+      const paint=(t)=>{ const hh=isNum(p.h)&&isNum(r.h)?lerp(p.h,r.h,t):r.h, oo=isNum(p.o)&&isNum(r.o)?lerp(p.o,r.o,t):r.o;
+        const ch=$('ch'+w.k), cO=$('co'+w.k); if(!ch) return; ch.textContent=isNum(hh)?f(hh)+(r.typed?'*':''):'—'; cO.textContent=isNum(oo)?f(oo):'—'; };
       const ch=$('ch'+w.k), cO=$('co'+w.k); ch.style.background=shade(r.h); ch.style.color=shadeText(r.h); cO.style.background=shade(r.o); cO.style.color=shadeText(r.o);
-      $('cg'+w.k).textContent=isFinite(r.gap)?fs(r.gap):'—'; $('cr'+w.k).innerHTML=r.gr==='lower'?'<b class="bad">Yes, lower</b>':r.gr==='higher'?'<b class="ok">Yes, higher</b>':grTxt(r.gr);
-      $('ct'+w.k).textContent=isFinite(r.tr)?((r.tr<=-0.05?'↓ ':(r.tr>=0.05?'↑ ':''))+fs(r.tr)):'—';
+      $('cg'+w.k).textContent=isNum(r.gap)?fs(r.gap):'—'; $('cr'+w.k).innerHTML=r.gr==='lower'?'<b class="bad">Yes, lower</b>':r.gr==='higher'?'<b class="ok">Yes, higher</b>':grTxt(r.gr);
+      $('ct'+w.k).textContent=isNum(r.tr)?((r.tr<=-0.05?'↓ ':(r.tr>=0.05?'↑ ':''))+fs(r.tr)):'—';
       if(anim&&!RM) tween(600,paint); else paint(1); HPREV[w.k]={h:r.h,o:r.o}; });
   }
   box.querySelectorAll('tr.row').forEach(tr=>{ const open=()=>{ S.heat.open=tr.dataset.k; persist(); box.querySelectorAll('tr.row').forEach(x=>x.classList.toggle('sel',x===tr)); drawDetail(false); $('detail').scrollIntoView({behavior:RM?'auto':'smooth',block:'nearest'}); };
@@ -856,13 +873,13 @@ function drawDetail(anim){
   if(!box.querySelector('#rb')||box.dataset.k!==k){ DPREV=null; box.dataset.k=k;
     box.innerHTML=`<div class="card"><h3>${w.name} <span class="small">· ${w.dim.toLowerCase()}</span></h3>
      <p><b>What it means:</b> ${WMEAN[k][0]}.</p><p><b>It matters if your company</b> ${WMEAN[k][1]}.</p>
-     <p class="small" style="margin-top:12px"><b>Range bars, ${y}:</b> each bar is the World Bank's 90% range. If the bars do not overlap, the gap is real.</p>
+     <p class="small" style="margin-top:12px"><b>Range bars, <span id="rbY">${y}</span>:</b> each bar is the World Bank's 90% range. If the bars do not overlap, the gap is real.</p>
      <svg id="rb" viewBox="0 0 640 130" role="img" aria-label="Range bars for host and home"></svg>
      <p class="small" style="margin-top:12px"><b>Trend, 2017–2025</b></p><svg id="tl" viewBox="0 0 640 170" role="img" aria-label="Trend line for host and home"></svg>
      <div class="btns"><button type="button" id="bUse">Use this for my essay (my ${w.dim.toLowerCase()} indicator)</button></div><p id="useMsg" class="small"></p></div>`;
     $('bUse').onclick=()=>{ S.heat[g]=k; persist(); $('useMsg').innerHTML='<span class="ok">✓ Chosen as your '+w.dim.toLowerCase()+' indicator.</span> Now fill in the box below.'; HPREV={}; const mb=$('mapBox'); if(mb) mb.innerHTML=''; drawMapBox(false); drawFrames(); renderSide(); $('frames').scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); };
   }
-  const rb=$('rb'); const X=v=>40+v*5.6;
+  const rb=$('rb'); const X=v=>40+v*5.6; const rbY=$('rbY'); if(rbY) rbY.textContent=String(y);
   const target={h:r.hd?[r.hd.lb,r.hd.ub,r.hd.v]:null,o:r.od?[r.od.lb,r.od.ub,r.od.v]:null};
   const from=DPREV||target;
   const drawRB=t=>{ while(rb.firstChild) rb.removeChild(rb.firstChild);
@@ -912,9 +929,9 @@ function heatHTML(){
   const co=S.co, y=heatYear(), ff='font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#000;'; const th=`${ff}font-weight:bold;border-top:1.5pt solid #000;border-bottom:0.75pt solid #000;padding:3pt 6pt;`;
   let h=`<p style="${ff}margin:0"><b>Figure X</b></p><p style="${ff}margin:0 0 4pt 0"><i>Governance scores (0–100), ${y}: ${esc(cname(co.host))} and ${esc(cname(co.home))}</i></p><table style="border-collapse:collapse;${ff}"><tr><th style="${th}text-align:left">Indicator</th><th style="${th}">${esc(cname(co.host))}</th><th style="${th}">${esc(cname(co.home))}</th><th style="${th}">Gap</th><th style="${th}">Real gap?</th><th style="${th}">Since 2017</th></tr>`;
   heatRows(y).forEach(g=>{ h+=`<tr><td colspan="6" style="${ff}font-weight:bold;padding:4pt 6pt 2pt 6pt">${g.grp}</td></tr>`;
-    g.rows.forEach(x=>{ const r=x.r; h+=`<tr><td style="${ff}padding:3pt 6pt">${x.w.name}</td><td style="${ff}padding:3pt 6pt;text-align:center;font-weight:bold;background-color:${shade(r.h)};color:${shadeText(r.h)}">${isFinite(r.h)?f(r.h)+(r.typed?'*':''):'—'}</td><td style="${ff}padding:3pt 6pt;text-align:center;font-weight:bold;background-color:${shade(r.o)};color:${shadeText(r.o)}">${isFinite(r.o)?f(r.o):'—'}</td><td style="${ff}padding:3pt 6pt;text-align:right">${isFinite(r.gap)?fs(r.gap):'—'}</td><td style="${ff}padding:3pt 6pt">${grTxt(r.gr)}</td><td style="${ff}padding:3pt 6pt;text-align:right">${isFinite(r.tr)?fs(r.tr):'—'}</td></tr>`; }); });
+    g.rows.forEach(x=>{ const r=x.r; h+=`<tr><td style="${ff}padding:3pt 6pt">${x.w.name}</td><td style="${ff}padding:3pt 6pt;text-align:center;font-weight:bold;background-color:${shade(r.h)};color:${shadeText(r.h)}">${isNum(r.h)?f(r.h)+(r.typed?'*':''):'—'}</td><td style="${ff}padding:3pt 6pt;text-align:center;font-weight:bold;background-color:${shade(r.o)};color:${shadeText(r.o)}">${isNum(r.o)?f(r.o):'—'}</td><td style="${ff}padding:3pt 6pt;text-align:right">${isNum(r.gap)?fs(r.gap):'—'}</td><td style="${ff}padding:3pt 6pt">${grTxt(r.gr)}</td><td style="${ff}padding:3pt 6pt;text-align:right">${isNum(r.tr)?fs(r.tr):'—'}</td></tr>`; }); });
   h+=`</table><p style="${ff}font-size:9pt;margin:4pt 0 0 0">${esc(heatNote(y))}</p>`; return h; }
-function heatNote(y){ return 'Note: darker = weaker score = more risk (bands of 20 points). Real gap = the two 90% ranges do not overlap. Source: World Bank (2026) Worldwide Governance Indicators, '+y+' data. Figure made by the author with the MG2644 module tool.'+(WGI.some(w=>rowVals(w.k,y).typed)?' * Typed in from the World Bank website.':''); }
+function heatNote(y){ return 'Note: darker = weaker score = more risk (bands of 20 points). Real gap = the two 90% ranges do not overlap. Source: '+wgiCite().replace(', ',' (')+') Worldwide Governance Indicators, '+y+' data. Figure made by the author with the MG2644 module tool.'+(WGI.some(w=>rowVals(w.k,y).typed)?' * Typed in from the World Bank website.':''); }
 function heatPlain(){ const y=heatYear(); return 'Figure X\nGovernance scores (0–100), '+y+': '+cname(S.co.host)+' and '+cname(S.co.home)+'\n'+heatRows(y).map(g=>g.grp+'\n'+g.rows.map(x=>[x.w.name,f(x.r.h),f(x.r.o),fs(x.r.gap),grTxt(x.r.gr),fs(x.r.tr)].join('\t')).join('\n')).join('\n')+'\n'+heatNote(y); }
 function heatPNG(trend){
   const co=S.co, y=heatYear(), scale=2, W=trend?1000:900, pad=20, fam='"Segoe UI", Calibri, Arial, sans-serif';
@@ -922,9 +939,9 @@ function heatPNG(trend){
   const cols=trend?[260].concat(YEARS.map(()=> (W-2*pad-260)/9)):[300,120,120,90,140,90];
   const heads=trend?[cname(co.host)].concat(YEARS.map(String)):['Indicator',cname(co.host),cname(co.home),'Gap','Real gap?','Since 2017'];
   const rows=[]; GROUPS.forEach(g=>{ rows.push({grp:g[0]}); WGI.filter(w=>w.dim===g[0]).forEach(w=>{ if(trend){ rows.push({cells:[w.name].concat(YEARS.map(v=>{ const d=hv(w.k,v,'host'); return d?d.v:NaN; })),shadeFrom:1}); }
-    else { const r=rowVals(w.k,y); rows.push({cells:[w.name,r.h,r.o,isFinite(r.gap)?fs(r.gap):'—',grTxt(r.gr),isFinite(r.tr)?fs(r.tr):'—'],shadeCols:[1,2]}); } }); });
+    else { const r=rowVals(w.k,y); rows.push({cells:[w.name,r.h,r.o,isNum(r.gap)?fs(r.gap):'—',grTxt(r.gr),isNum(r.tr)?fs(r.tr):'—'],shadeCols:[1,2],star:r.typed}); } }); });
   const rh=34, title=trend?'Governance scores (0–100), 2017–2025: '+cname(co.host):'Governance scores (0–100), '+y+': '+cname(co.host)+' and '+cname(co.home);
-  const note=trend?'Note: darker = weaker score = more risk (bands of 20 points). Source: World Bank (2026) Worldwide Governance Indicators. Figure made by the author with the MG2644 module tool.':heatNote(y);
+  const note=trend?'Note: darker = weaker score = more risk (bands of 20 points). Source: '+wgiCite().replace(', ',' (')+') Worldwide Governance Indicators. Figure made by the author with the MG2644 module tool.':heatNote(y);
   ctx.font=`13px ${fam}`; const noteL=[]; let cur=''; note.split(' ').forEach(wd=>{ const t=cur?cur+' '+wd:wd; if(ctx.measureText(t).width>W-2*pad&&cur){ noteL.push(cur); cur=wd; } else cur=t; }); if(cur) noteL.push(cur);
   const H=pad+22+24+12+rh+rows.length*rh+16+30+noteL.length*19+pad;
   c.width=W*scale; c.height=H*scale; ctx.scale(scale,scale); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.textBaseline='middle';
@@ -932,7 +949,7 @@ function heatPNG(trend){
   ctx.fillRect(pad,yy,W-2*pad,2); let x=pad; ctx.font=`bold 14px ${fam}`; heads.forEach((hd,j)=>{ ctx.textAlign=j===0?'left':'center'; ctx.fillText(hd,j===0?x+6:x+cols[j]/2,yy+rh/2); x+=cols[j]; }); yy+=rh; ctx.fillRect(pad,yy,W-2*pad,1);
   rows.forEach(r=>{ if(r.grp){ ctx.textAlign='left'; ctx.font=`bold 12px ${fam}`; ctx.fillStyle='#5b6478'; ctx.fillText(r.grp.toUpperCase(),pad+6,yy+rh/2); ctx.fillStyle='#000'; yy+=rh; return; }
     let x2=pad; r.cells.forEach((v,j)=>{ const shaded=trend?j>=1:(r.shadeCols.includes(j));
-      if(shaded){ ctx.fillStyle=shade(v); ctx.fillRect(x2+3,yy+3,cols[j]-6,rh-6); ctx.fillStyle=shadeText(v); ctx.font=`bold 14px ${fam}`; ctx.textAlign='center'; ctx.fillText(isFinite(v)?f(v,trend?0:1):'—',x2+cols[j]/2,yy+rh/2); }
+      if(shaded){ ctx.fillStyle=shade(v); ctx.fillRect(x2+3,yy+3,cols[j]-6,rh-6); ctx.fillStyle=shadeText(v); ctx.font=`bold 14px ${fam}`; ctx.textAlign='center'; ctx.fillText(isNum(v)?f(v,trend?0:1)+(r.star&&j===1?'*':''):'—',x2+cols[j]/2,yy+rh/2); }
       else { ctx.fillStyle='#000'; ctx.font=`14px ${fam}`; ctx.textAlign=j===0?'left':'center'; ctx.fillText(String(v),j===0?x2+6:x2+cols[j]/2,yy+rh/2); }
       x2+=cols[j]; }); ctx.fillStyle='#000'; yy+=rh; });
   ctx.fillRect(pad,yy,W-2*pad,2); yy+=16;
@@ -979,7 +996,7 @@ function tableSpecs(){
   const t3rows=WGI.map(x=>{ const r=rowVals(x.k,wy); const d=r.hd;
     const hvTxt = d? f(d.v)+(d.typed?'*':'')+(d.lb!=null?' ('+f(d.lb)+'–'+f(d.ub)+')':'') : '—';
     const mark=(S.heat.pol===x.k||S.heat.leg===x.k)?' ◆':'';
-    return [x.name+' ('+x.dim.toLowerCase()+')'+mark, hvTxt, isFinite(r.o)?f(r.o):'—', grTxt(r.gr), isFinite(r.tr)?fs(r.tr):'—']; });
+    return [x.name+' ('+x.dim.toLowerCase()+')'+mark, hvTxt, isNum(r.o)?f(r.o):'—', grTxt(r.gr), isNum(r.tr)?fs(r.tr):'—']; });
   const typed=WGI.some(x=>rowVals(x.k,wy).typed); const chosen=!!(S.heat.pol||S.heat.leg);
   const t3={key:'t3', title:'Governance scores (0–100): '+host+' and '+home+', '+wy,
     head:['Indicator', host+' (90% range)', home, 'Real gap?', host+': change since 2017'],
@@ -1050,7 +1067,7 @@ function tableGuide(n,co,c){
     where:'<b>Recommendations</b>, in your pricing note. The brief says: <blockquote>Include a short FX/pricing note using PPP/IFE scenarios (assumptions made explicit).</blockquote>',
     steps:['Paste the table under your pricing note.',
            'Write one sentence that points to it, e.g. "Table 1 shows that…" and give your price range (PPP to IFE).',
-           'Say which price you recommend and <b>why it suits your company</b> (use your company card: customers, rivals, main goal).',
+           'Say which price you recommend and <b>why it suits your company</b> (think about its customers, its rivals and its main goal).',
            'Give your plan B if the stress test happens.'],
     avoid:'Giving one price as if it were certain. PPP and the IFE are predictions, so give a range and a plan B.', replay:['lab4','Not sure why a range? Replay Lab 4']};
   if(n===2){ const real=c.B25>=0?'savers earn more than inflation, so borrowing there is expensive':'savers lose money every year, so people may move their money out of the '+esc(co.hostCur);
@@ -1062,7 +1079,7 @@ function tableGuide(n,co,c){
            'Explain what the numbers mean for <b>your company</b>: its prices, and whether it should borrow in the host or home currency.'],
     avoid:'Listing the numbers without saying what they mean for your company.', replay:['lab2','Not sure what these mean? Replay Lab 2 (IFE) and Lab 3 (Fisher)']}; }
   const y3=heatYear(); const pol=weakestY('Political',y3), leg=weakestY('Legal',y3); const low=(pol&&leg)?(pol.v<=leg.v?pol:leg):(pol||leg);
-  const gr=low?gapRealY(low.k,y3):null; const rv=low?rowVals(low.k,y3):null; const d=(rv&&isFinite(rv.tr))?{v:rv.h,v17:rv.h-rv.tr}:null;
+  const gr=low?gapRealY(low.k,y3):null; const rv=low?rowVals(low.k,y3):null; const d=(rv&&isNum(rv.tr))?{v:rv.h,v17:rv.h-rv.tr}:null;
   return {
     plain: low? esc(host)+'\'s lowest score in '+y3+' is <b>'+low.name.toLowerCase()+' ('+f(low.v)+'/100)</b>. '+(gr==='lower'?'The gap with '+esc(home)+' is <b>real</b>: the two ranges do not overlap.':gr==='unclear'?'The gap with '+esc(home)+' is <b>not clear</b>: the two ranges overlap, so make only a careful claim.':'')+(d&&d.v17!=null?' Since 2017 this score has '+(d.v-d.v17<0?'got <b>worse</b>':'stayed the same or got <b>better</b>')+' ('+fs(d.v-d.v17)+').':'') : 'Your governance scores for '+esc(host)+'.',
     where:'<b>Political, Legal &amp; Cultural Environment</b>. For each of your two dimensions, the brief asks for: <blockquote>One or two concrete facts or a single indicator with citation (e.g., a recent policy change, an index score, a sector rule).</blockquote> Then the implications and a theory, then the risk and your mitigation.',
@@ -1082,7 +1099,7 @@ function vTables(){
   <p><b>1. They save words.</b> The brief says figures and tables, and their captions, do not count towards your 2,500 words.</p>
   <p><b>2. They show your evidence at a glance</b>, with the source under each table.</p>
   <p><b>3. They help you write.</b> Each table goes in one section of your essay. The notes below tell you which one and what to write.</p></div>
-  <div class="warn"><b>Three rules</b><br>1. Point to every table in your text ("Table 1 shows…"). A table on its own earns few marks: <b>your explanation for your company</b> earns them.<br>2. These tables are <b>extra</b>. Your two required figures must still be charts you made in Excel (the brief: "Screenshots of two figures you created from your data").<br>3. <b>Never</b> use the game's results (revenue %, customers %, reputation, control). They come from game rules, not real data.</div>
+  <div class="warn"><b>Three rules</b><br>1. Point to every table in your text ("Table 1 shows…"). A table on its own earns few marks: <b>your explanation for your company</b> earns them.<br>2. These tables are <b>extra</b>. Your two required figures must still be charts you made in Excel (the brief: "Screenshots of two figures you created from your data").<br>3. If you played the Week 8 game, <b>never</b> use its results (revenue %, customers %, reputation, control). They came from game rules, not real data.</div>
   <h2>Step 1 · Where did your numbers come from?</h2>
   <p>Fill this in once. It completes the source line under each table and your reference list.</p>
   <div class="card"><div class="grid2">
