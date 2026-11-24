@@ -171,8 +171,13 @@ function isNum(v){ return typeof v==='number' && Number.isFinite(v); }
 function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function num(v){
   if(v===null||v===undefined) return NaN;
-  let t=String(v).trim().replace(/[−–—]/g,'-').replace(/[\s,£€$%¥₹₺₫]/g,'');
-  t=t.replace(/^[A-Za-z]{1,3}(?=[-\d.])/,'');
+  if(typeof v==='number') return v;
+  let t=String(v).trim().replace(/[−–—]/g,'-').replace(/[\s£€$%¥₹₺₫]/g,'');
+  t=t.replace(/^[A-Za-z]{1,3}(?=[-\d.,])/,'');
+  /* Decimal comma ("3,4" or "33450,12") as well as thousands commas ("631,354"). */
+  const c=t.indexOf(',')>=0, d=t.indexOf('.')>=0;
+  if(c&&d){ t=(t.lastIndexOf(',')>t.lastIndexOf('.'))?t.replace(/\./g,'').replace(',','.'):t.replace(/,/g,''); }
+  else if(c){ t=(/^-?\d{1,3}(,\d{3})+$/.test(t)||(t.match(/,/g)||[]).length>1)?t.replace(/,/g,''):t.replace(',','.'); }
   if(t==='') return NaN;
   return Number(t);
 }
@@ -305,7 +310,7 @@ function hasAny(iso3,k){ const c=WGIALL[iso3]; return !!(c&&c[k]); }
 function latestYear(iso3){ let m=null; WGI.forEach(x=>{ const d=wd(iso3,x.k); if(d&&(m===null||d.yr>m)) m=d.yr; }); return m||2025; }
 function heatYear(){ if(!S.heat.year) S.heat.year=latestYear(S.co.host); return S.heat.year; }
 function hv(k,y,side){ const iso=side==='home'?S.co.home:S.co.host; const d=wdy(iso,k,y); if(d) return d;
-  if(!hasAny(iso,k) && y===latestYear(iso)){ const t=num(S.wgi[side==='home'?'home':'host'][k]); if(isNum(t)) return {v:t,lb:null,ub:null,yr:y,typed:true}; }
+  if(!hasAny(iso,k) && y===latestYear(iso)){ const t=num(S.wgi[side==='home'?'home':'host'][k]); if(isNum(t)&&t>=0&&t<=100) return {v:t,lb:null,ub:null,yr:y,typed:true}; }
   return null; }
 function gapRealY(k,y){ const h=hv(k,y,'host'), o=hv(k,y,'home');
   if(!h||!o||h.lb==null||o.lb==null) return null; if(h.ub<o.lb) return 'lower'; if(h.lb>o.ub) return 'higher'; return 'unclear'; }
@@ -350,7 +355,7 @@ function renderSide(){
    ${secs.map(s=>`<div class="sec"><b>${s.sec}</b>${s.items.map(it=>`<button class="it" type="button" data-go="${it[2]}"><span class="tick ${it[1]?'on':''}">${it[1]?'✓':''}</span><span>${it[0]}</span></button>`).join('')}</div>`).join('')}
    <button class="ghost dl" id="bChk" type="button">Download my coursework checklist</button></div>`;
   side.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ if(!setupDone()) return go('company'); go(b.dataset.go); });
-  $('bChk').onclick=()=>download(fileBase()+'_checklist.txt',buildChecklist(),'text/plain;charset=utf-8');
+  $('bChk').onclick=()=>{ if(!setupDone()) return go('company'); download(fileBase()+'_checklist.txt',buildChecklist(),'text/plain;charset=utf-8'); };
 }
 function buildChecklist(){
   const co=S.co, c=S.calc, my=S.my, h=S.heat, y=heatYear(); const L=[];
@@ -400,7 +405,7 @@ function vWelcome(){
   $('bNew').onclick=()=>{ S=fresh(); go('company'); };
   const bc=$('bCont'); if(bc) bc.onclick=()=>{ try{ loadObj(saved); }catch(e){ go('company'); } };
   $('bDemo').onclick=()=>{ S=fresh(); S.demo=true; S.co=Object.assign({},ATOM.co); S.calc=Object.assign({},ATOM.calc);
-    const e=expect(S.calc); Object.assign(S.calc,e); ['B17','B18','B19','B20','B21'].forEach(k=>S.my[k]=S.calc[k]); go('menu'); };
+    const e=expect(S.calc); Object.keys(e).forEach(k=>{ S.calc[k]=['B28','B29','B30','B31'].includes(k)?Math.round(e[k]):Math.round(e[k]*100)/100; }); ['B17','B18','B19','B20','B21'].forEach(k=>S.my[k]=S.calc[k]); recheckCalc(S); go('menu'); };
   const fi=$('fileIn'); $('bLoad').onclick=()=>fi.click();
   fi.onchange=()=>{ const file=fi.files[0]; if(!file) return; const rd=new FileReader(); rd.onload=()=>{ try{ loadObj(JSON.parse(rd.result)); }catch(e){ alertBox('That file is not a Market Entry Desk save file.'); } }; rd.readAsText(file); };
   $('bPaste').onclick=()=>$('pasteBox').classList.toggle('hide');
@@ -492,8 +497,9 @@ function doCheck(){
   if(c.B17===4.1&&c.B18===2.8&&c.B19===13.75&&c.B20===2.5&&!(S.co.host==='BRA'&&S.co.home==='ITA')){
     msg.innerHTML='<div class="banner"><b>These look like ATOM\'s numbers from the template</b> (4.1, 2.8, 13.75, 2.50). Replace B17–B20 in your Excel file with <b>your own countries\'</b> numbers, then type them here.</div>'; return; }
   const e=expect(c);
-  RESULTS.forEach(r=>{ const k=r[0]; if(S.shown[k]){ S.ok[k]=true; return; }
-    const res=checkCell(k,c,e); S.ok[k]=res.ok; S.ok['_'+k]=res.msg||''; if(!res.ok) S.tries[k]=(S.tries[k]||0)+1; });
+  RESULTS.forEach(r=>{ const k=r[0]; const res=checkCell(k,c,e);
+    if(S.shown[k]&&!res.ok){ delete S.shown[k]; res.msg='Your yellow cells changed, so this answer changed too.'; }
+    S.ok[k]=res.ok; S.ok['_'+k]=res.msg||''; if(!res.ok) S.tries[k]=(S.tries[k]||0)+1; });
   persist(); paintChecks(); renderSide();
   msg.innerHTML = allOk()? '<span class="ok">All correct. Your Excel calculator is finished. ✓</span>' : '<span class="bad">Some cells need fixing. Fix them in Excel, then type the new number here.</span>';
   $('bNext').disabled=!allOk();
@@ -508,6 +514,7 @@ function paintChecks(){
       m.innerHTML=h; } });
   app.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{ const k=b.dataset.show; let val=e[k];
     if(['B29','B30','B31'].includes(k)){ const base=(isNum(c.B28)&&c.B28>0&&S.ok.B28)?c.B28:e.B28; val=base*(1+({B29:e.B23,B30:e.B24,B31:c.B21}[k])/100); }
+    val=['B28','B29','B30','B31'].includes(k)?Math.round(val):Math.round(val*100)/100;
     S.calc[k]=val; S.shown[k]=true; S.ok[k]=true; persist(); vCalc(); renderSide();
     $('calcMsg').innerHTML='<span class="small">Answer shown for '+k+'. Now fix that cell in your Excel file too.</span>'; });
 }
@@ -805,7 +812,7 @@ function vHeat(){
   const missing=WGI.filter(x=>!hasAny(co.host,x.k));
   app.innerHTML=`<h1>Governance heat map</h1>
   <p class="lead">How does <b>${host}</b> compare with <b>${home}</b>? Build the map, read it, then choose <b>one political</b> and <b>one legal</b> indicator for your essay.</p>
-  <p class="small">These World Bank scores cover the <b>political and legal</b> environment only. If one of your two dimensions is cultural, use a cultural source instead (e.g. Hofstede via The Culture Factor, or GLOBE).</p>
+  <p class="small">These World Bank scores cover the <b>political and legal</b> environment only. If one of your two dimensions is cultural, use a cultural source instead: compare ${host} and ${home} on <a href="https://www.theculturefactor.com/country-comparison-tool" target="_blank" rel="noopener">The Culture Factor's country comparison tool ↗</a> (Hofstede's six dimensions), or GLOBE.</p>
   <div class="card">
     <div class="ctrl ctrl3">
       <div class="field"><label for="hHost">Host</label><select id="hHost">${countryOptions(co.host)}</select></div>
@@ -815,7 +822,7 @@ function vHeat(){
     ${HOSTMSG?`<div class="warn" id="hostMsg"><b>You changed your ${HOSTMSG.home?'home':'host'} country from ${esc(cname(HOSTMSG.from))} to ${esc(cname(HOSTMSG.to))}.</b> This changes it in every tool. Your ${HOSTMSG.home?'home':'host'} currency is still "${esc(HOSTMSG.home?co.homeCur:co.hostCur)}", and your Excel numbers are still the old ones. <button type="button" class="quiet" id="bFixCo">Check my company details</button></div>`:''}
     <div class="tabs"><button type="button" id="tMap" class="${h.view!=='trend'?'on':''}">Map: one year</button><button type="button" id="tTrend" class="${h.view==='trend'?'on':''}">Trend: 2017–2025</button><button type="button" class="ghost" id="bPlayY">▶ Play 2017 → 2025</button></div>
     <div id="mapBox" style="overflow-x:auto"></div>${legendHTML()}
-    ${missing.length?`<div class="warn" style="margin-top:12px">The World Bank has no score for ${missing.map(x=>x.name.toLowerCase()).join(' or ')} in ${host}. Type the latest score from the World Bank page if you need it: ${missing.map(x=>`<label style="display:inline-block;margin:4px 10px 0 0">${x.name} <input class="num" style="max-width:90px" type="text" id="ty${x.k}" value="${esc(S.wgi.host[x.k]||'')}"></label> <a href="${wgiLink(x.k,co.host)}" target="_blank" rel="noopener">look up ↗</a>`).join(' ')}</div>`:''}
+    ${missing.length?`<div class="warn" style="margin-top:12px">The World Bank has no score for ${missing.map(x=>x.name.toLowerCase()).join(' or ')} in ${host}. Type the latest score from the World Bank page if you need it: ${missing.map(x=>`<label style="display:inline-block;margin:4px 10px 0 0">${x.name} <input class="num" style="max-width:90px" type="text" id="ty${x.k}" value="${esc(S.wgi.host[x.k]||'')}"></label> <a href="${wgiLink(x.k,co.host)}" target="_blank" rel="noopener">look up ↗</a>`).join(' ')}<p id="tyMsg" class="hint"></p></div>`:''}
   </div>
   <div class="card"><h3>How to read it</h3><ol style="margin:0 0 0 20px;padding:0">
     <li><b>Find the darkest cell</b> in the ${host} column. That is its weakest score: the biggest risk.</li>
@@ -837,7 +844,8 @@ function vHeat(){
   $('tTrend').onclick=()=>{ stopAll(); S.heat.view='trend'; persist(); $('tTrend').classList.add('on'); $('tMap').classList.remove('on'); drawMapBox(false); };
   $('bPlayY').onclick=()=>{ stopAll(); S.heat.view='map'; $('tMap').classList.add('on'); $('tTrend').classList.remove('on'); HPREV={}; let i=0; setYear(YEARS[0],false);
     $('bPlayY').textContent='Playing…'; const t=setInterval(()=>{ i++; if(i>=YEARS.length){ clearInterval(t); $('bPlayY').textContent='▶ Play 2017 → 2025'; return; } setYear(YEARS[i],true); },1100); TIMERS.push(t); };
-  missing.forEach(x=>{ const inp=$('ty'+x.k); inp.onchange=()=>{ S.wgi.host[x.k]=inp.value.trim(); persist(); HPREV={}; drawMapBox(false); drawSpot(); }; });
+  missing.forEach(x=>{ const inp=$('ty'+x.k); inp.onchange=()=>{ const raw=inp.value.trim(), t=num(raw), ok=raw===''||(isNum(t)&&t>=0&&t<=100);
+    $('tyMsg').textContent=ok?'':'Scores go from 0 to 100. Check the number on the World Bank page.'; S.wgi.host[x.k]=ok?raw:''; persist(); HPREV={}; drawMapBox(false); drawSpot(); drawFrames(); }; });
   $('dPng').onclick=()=>{ heatPNG(false); S.copied.heat=true; persist(); };
   $('dTrend').onclick=()=>heatPNG(true);
   $('dWord').onclick=()=>copyRich(heatHTML(),heatPlain(),$('dWord'));
